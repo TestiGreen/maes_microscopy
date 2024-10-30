@@ -316,6 +316,11 @@ class MAEModel(PreTrainedModel):
     ) -> None:
         super().on_validation_batch_end(outputs, batch, batch_idx, dataloader_idx)
 
+    def predict(self, imgs: torch.Tensor) -> torch.Tensor:
+        imgs = self.input_norm(imgs)
+        latent = self.encoder.forward(imgs)
+        return latent
+
     def save_pretrained(self, save_directory: str, **kwargs):
         filename = kwargs.pop("filename", "model.safetensors")
         modelpath = f"{save_directory}/{filename}"
