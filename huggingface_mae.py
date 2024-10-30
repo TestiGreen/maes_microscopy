@@ -325,15 +325,10 @@ class MAEModel(PreTrainedModel):
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
         filename = kwargs.pop("filename", "model.safetensors")
-        # from_state_dict = kwargs.pop("from_state_dict", False)
 
         modelpath = f"{pretrained_model_name_or_path}/{filename}"
         config = MAEConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
         state_dict = torch.load(modelpath, map_location="cpu")
         model = cls(config, *model_args, **kwargs)
         model.load_state_dict(state_dict["state_dict"])
-        # if from_state_dict:
-        #     model.load_state_dict(state_dict["state_dict"])
-        # else:
-        #     model.load_state_dict(state_dict)
         return model
