@@ -128,9 +128,9 @@ class MAEModel(PreTrainedModel):
             self.decoder.embed_dim,
             length=self.encoder.vit_backbone.patch_embed.grid_size[0],
             use_class_token=self.encoder.vit_backbone.cls_token is not None,
-            num_modality=self.decoder.num_modalities
-            if self.encoder.channel_agnostic
-            else 1,
+            num_modality=(
+                self.decoder.num_modalities if self.encoder.channel_agnostic else 1
+            ),
         )
 
         if config.use_MAE_weight_init:
