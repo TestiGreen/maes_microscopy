@@ -9,6 +9,9 @@ xformers
 zarr
 hydra-core
 pytorch-lightning>=2.1
+matplotlib
+scikit-image
+ipykernel
 isort
 ruff
 pytest
