@@ -16,18 +16,17 @@ def huggingface_model():
     return huggingface_model
 
 
-@pytest.fixture
-def example_input_array(huggingface_model):
+@pytest.mark.parametrize("C", [1, 4, 6, 11])
+@pytest.mark.parametrize("return_channelwise_embeddings", [True, False])
+def test_model_predict(huggingface_model, C, return_channelwise_embeddings):
     example_input_array = torch.randint(
         low=0,
         high=255,
-        size=(2, 6, 256, 256),
+        size=(2, C, 256, 256),
         dtype=torch.uint8,
         device=huggingface_model.device,
     )
-    return example_input_array
-
-
-def test_model_predict(huggingface_model, example_input_array):
+    huggingface_model.return_channelwise_embeddings = return_channelwise_embeddings
     embeddings = huggingface_model.predict(example_input_array)
-    assert embeddings.shape == (2, 384)
+    expected_output_dim = 384 * C if return_channelwise_embeddings else 384
+    assert embeddings.shape == (2, expected_output_dim)

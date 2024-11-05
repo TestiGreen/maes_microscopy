@@ -36,6 +36,7 @@ class MAEConfig(PretrainedConfig):
         trim_encoder_blocks=None,
         layernorm_unfreeze=True,
         mask_fourier_loss=True,
+        return_channelwise_embeddings=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -56,6 +57,7 @@ class MAEConfig(PretrainedConfig):
         self.trim_encoder_blocks = trim_encoder_blocks
         self.layernorm_unfreeze = layernorm_unfreeze
         self.mask_fourier_loss = mask_fourier_loss
+        self.return_channelwise_embeddings = return_channelwise_embeddings
 
 
 class MAEModel(PreTrainedModel):
@@ -80,6 +82,8 @@ class MAEModel(PreTrainedModel):
         self.trim_encoder_blocks = config.trim_encoder_blocks
         self.layernorm_unfreeze = config.layernorm_unfreeze
         self.mask_fourier_loss = config.mask_fourier_loss
+        self.return_channelwise_embeddings = config.return_channelwise_embeddings
+        self.tokens_per_channel = 256  # hardcode the number of tokens per channel since we are patch16 crop 256
 
         # loss stuff
         self.apply_loss_unmasked = config.apply_loss_unmasked
@@ -318,7 +322,19 @@ class MAEModel(PreTrainedModel):
 
     def predict(self, imgs: torch.Tensor) -> torch.Tensor:
         imgs = self.input_norm(imgs)
-        latent = self.encoder.forward(imgs)
+        X = self.encoder.vit_backbone.forward_features(
+            imgs
+        )  # 3d tensor N x num_tokens x dim
+        if self.return_channelwise_embeddings:
+            N, _, d = X.shape
+            num_channels = imgs.shape[1]
+            X_reshaped = X[:, 1:, :].view(N, num_channels, self.tokens_per_channel, d)
+            pooled_segments = X_reshaped.mean(
+                dim=2
+            )  # Resulting shape: (N, num_channels, d)
+            latent = pooled_segments.view(N, num_channels * d).contiguous()
+        else:
+            latent = X[:, 1:, :].mean(dim=1)  # 1 + 256 * C tokens
         return latent
 
     def save_pretrained(self, save_directory: str, **kwargs):
