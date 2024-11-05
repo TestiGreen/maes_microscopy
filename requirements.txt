@@ -26,6 +26,8 @@ certifi==2024.8.30
     # via requests
 charset-normalizer==3.4.0
     # via requests
+exceptiongroup==1.2.2
+    # via pytest
 fasteners==0.19
     # via zarr
 filelock==3.16.1
@@ -55,6 +57,8 @@ idna==3.10
     # via
     #   requests
     #   yarl
+iniconfig==2.0.0
+    # via pytest
 isort==5.13.2
     # via -r requirements.in
 jinja2==3.1.4
@@ -122,13 +126,18 @@ packaging==24.1
     #   huggingface-hub
     #   hydra-core
     #   lightning-utilities
+    #   pytest
     #   pytorch-lightning
     #   torchmetrics
     #   transformers
 pillow==11.0.0
     # via torchvision
+pluggy==1.5.0
+    # via pytest
 propcache==0.2.0
     # via yarl
+pytest==8.3.3
+    # via -r requirements.in
 pytorch-lightning==2.4.0
     # via -r requirements.in
 pyyaml==6.0.2
@@ -156,6 +165,8 @@ timm==1.0.11
     # via -r requirements.in
 tokenizers==0.20.1
     # via transformers
+tomli==2.0.2
+    # via pytest
 torch==2.5.0
     # via
     #   -r requirements.in
