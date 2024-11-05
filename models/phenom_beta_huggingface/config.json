@@ -43,8 +43,9 @@
         "_target_": "normalizer.Normalizer"
       },
       {
-        "_target_": "torch.nn.LazyInstanceNorm2d",
+        "_target_": "torch.nn.InstanceNorm2d",
         "affine": false,
+        "num_features": null,
         "track_running_stats": false
       }
     ],
