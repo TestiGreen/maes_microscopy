@@ -16,18 +16,14 @@ def huggingface_model():
     return huggingface_model
 
 
-@pytest.fixture
-def example_input_array(huggingface_model):
+@pytest.mark.parametrize("CHANNEL", [1, 4, 6, 11])
+def test_model_predict(huggingface_model, CHANNEL):
     example_input_array = torch.randint(
         low=0,
         high=255,
-        size=(2, 6, 256, 256),
+        size=(2, CHANNEL, 256, 256),
         dtype=torch.uint8,
         device=huggingface_model.device,
     )
-    return example_input_array
-
-
-def test_model_predict(huggingface_model, example_input_array):
     embeddings = huggingface_model.predict(example_input_array)
     assert embeddings.shape == (2, 384)
