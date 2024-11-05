@@ -1,15 +1,19 @@
-import logging
-import warnings
 from typing import Dict, Tuple, Union
 
 import torch
 import torch.nn as nn
-from hydra.utils import instantiate
+
 from transformers import PretrainedConfig, PreTrainedModel
 
-from mae_modules import CAMAEDecoder, MAEDecoder
-from mae_utils import flatten_images, unflatten_tokens
-from vit import generate_2d_sincos_pos_embeddings
+from loss import FourierLoss
+from normalizer import Normalizer
+from mae_modules import CAMAEDecoder, MAEDecoder, MAEEncoder
+from mae_utils import flatten_images
+from vit import (
+    generate_2d_sincos_pos_embeddings,
+    sincos_positional_encoding_vit,
+    vit_small_patch16_256,
+)
 
 TensorDict = Dict[str, torch.Tensor]
 
@@ -25,15 +29,11 @@ class MAEConfig(PretrainedConfig):
         loss=None,
         optimizer=None,
         input_norm=None,
-        norm_pix_loss=False,
         fourier_loss=None,
         fourier_loss_weight=0.0,
         lr_scheduler=None,
         use_MAE_weight_init=False,
         crop_size=-1,
-        num_blocks_to_freeze=0,
-        trim_encoder_blocks=None,
-        layernorm_unfreeze=True,
         mask_fourier_loss=True,
         return_channelwise_embeddings=False,
         **kwargs,
@@ -45,15 +45,11 @@ class MAEConfig(PretrainedConfig):
         self.loss = loss
         self.optimizer = optimizer
         self.input_norm = input_norm
-        self.norm_pix_loss = norm_pix_loss
         self.fourier_loss = fourier_loss
         self.fourier_loss_weight = fourier_loss_weight
         self.lr_scheduler = lr_scheduler
         self.use_MAE_weight_init = use_MAE_weight_init
         self.crop_size = crop_size
-        self.num_blocks_to_freeze = num_blocks_to_freeze
-        self.trim_encoder_blocks = trim_encoder_blocks
-        self.layernorm_unfreeze = layernorm_unfreeze
         self.mask_fourier_loss = mask_fourier_loss
         self.return_channelwise_embeddings = return_channelwise_embeddings
 
@@ -70,27 +66,39 @@ class MAEModel(PreTrainedModel):
         super().__init__(config)
 
         self.mask_ratio = config.mask_ratio
-        self.encoder = instantiate(config.encoder)
-        self.decoder = instantiate(config.decoder)
-        self.input_norm = instantiate(config.input_norm)
-        self.norm_pix_loss = config.norm_pix_loss
+
+        # Could use Hydra to instantiate instead
+        self.encoder = MAEEncoder(
+            vit_backbone=sincos_positional_encoding_vit(
+                vit_backbone=vit_small_patch16_256(global_pool="avg")
+            ),
+            max_in_chans=11,  # upper limit on number of input channels
+            channel_agnostic=True,
+        )
+        self.decoder = CAMAEDecoder(
+            depth=8,
+            embed_dim=512,
+            mlp_ratio=4,
+            norm_layer=nn.LayerNorm,
+            num_heads=16,
+            num_modalities=6,
+            qkv_bias=True,
+            tokens_per_modality=256,
+        )
+        self.input_norm = torch.nn.Sequential(
+            Normalizer(),
+            nn.InstanceNorm2d(None, affine=False, track_running_stats=False),
+        )
+
         self.fourier_loss_weight = config.fourier_loss_weight
-        self.blocks_to_freeze = config.num_blocks_to_freeze
-        self.trim_encoder_blocks = config.trim_encoder_blocks
-        self.layernorm_unfreeze = config.layernorm_unfreeze
         self.mask_fourier_loss = config.mask_fourier_loss
         self.return_channelwise_embeddings = config.return_channelwise_embeddings
         self.tokens_per_channel = 256  # hardcode the number of tokens per channel since we are patch16 crop 256
 
         # loss stuff
-        self.loss = instantiate(config.loss)
-        if hasattr(self.loss, "reduction") and self.loss.reduction != "none":
-            warnings.warn(
-                "loss reduction not set to 'none', setting to 'none' in MAE constructor"
-            )
-            self.loss.reduction = "none"
+        self.loss = torch.nn.MSELoss(reduction="none")
 
-        self.fourier_loss = instantiate(config.fourier_loss)
+        self.fourier_loss = FourierLoss(num_multimodal_modalities=6)
         if self.fourier_loss_weight > 0 and self.fourier_loss is None:
             raise ValueError(
                 "FourierLoss weight is activated but no fourier_loss was defined in constructor"
@@ -135,11 +143,6 @@ class MAEModel(PreTrainedModel):
 
     def setup(self, stage: str) -> None:
         super().setup(stage)
-        if self.trim_encoder_blocks is not None:
-            logging.info(f"Trimming encoder to {self.trim_encoder_blocks} blocks!")
-            self.encoder.vit_backbone.blocks = self.encoder.vit_backbone.blocks[
-                : self.trim_encoder_blocks
-            ]
 
     def _MAE_init_weights(self, m):
         if isinstance(m, nn.Linear):
