@@ -26,7 +26,6 @@ class MAEConfig(PretrainedConfig):
         optimizer=None,
         input_norm=None,
         norm_pix_loss=False,
-        apply_loss_unmasked=False,
         fourier_loss=None,
         fourier_loss_weight=0.0,
         lr_scheduler=None,
@@ -47,7 +46,6 @@ class MAEConfig(PretrainedConfig):
         self.optimizer = optimizer
         self.input_norm = input_norm
         self.norm_pix_loss = norm_pix_loss
-        self.apply_loss_unmasked = apply_loss_unmasked
         self.fourier_loss = fourier_loss
         self.fourier_loss_weight = fourier_loss_weight
         self.lr_scheduler = lr_scheduler
@@ -77,7 +75,6 @@ class MAEModel(PreTrainedModel):
         self.input_norm = instantiate(config.input_norm)
         self.norm_pix_loss = config.norm_pix_loss
         self.fourier_loss_weight = config.fourier_loss_weight
-        self.apply_loss_unmasked = config.apply_loss_unmasked
         self.blocks_to_freeze = config.num_blocks_to_freeze
         self.trim_encoder_blocks = config.trim_encoder_blocks
         self.layernorm_unfreeze = config.layernorm_unfreeze
@@ -86,13 +83,8 @@ class MAEModel(PreTrainedModel):
         self.tokens_per_channel = 256  # hardcode the number of tokens per channel since we are patch16 crop 256
 
         # loss stuff
-        self.apply_loss_unmasked = config.apply_loss_unmasked
         self.loss = instantiate(config.loss)
-        if (
-            hasattr(self.loss, "reduction")
-            and self.loss.reduction != "none"
-            and not self.apply_loss_unmasked
-        ):
+        if hasattr(self.loss, "reduction") and self.loss.reduction != "none":
             warnings.warn(
                 "loss reduction not set to 'none', setting to 'none' in MAE constructor"
             )
@@ -106,11 +98,6 @@ class MAEModel(PreTrainedModel):
         elif self.fourier_loss_weight >= 1:
             raise ValueError(
                 "FourierLoss weight is too large to do mixing factor, weight should be < 1"
-            )
-
-        if self.mask_fourier_loss and self.apply_loss_unmasked:
-            raise ValueError(
-                "mask_fourier_loss and apply_loss_unmasked cannot both be True"
             )
 
         self.patch_size = int(self.encoder.vit_backbone.patch_embed.patch_size[0])
@@ -204,7 +191,6 @@ class MAEModel(PreTrainedModel):
         reconstruction: torch.Tensor,
         img: torch.Tensor,
         mask: torch.Tensor,
-        apply_loss_to_unmasked_tokens: bool = False,
     ) -> Tuple[torch.Tensor, Dict[str, float]]:
         """Computes final loss and returns specific values of component losses for metric reporting."""
         loss_dict = {}
@@ -221,10 +207,7 @@ class MAEModel(PreTrainedModel):
         loss = loss.mean(
             dim=-1
         )  # average over embedding dim -> mean loss per patch (N,L)
-        if apply_loss_to_unmasked_tokens:
-            loss = loss.mean()
-        else:
-            loss = (loss * mask).sum() / mask.sum()  # mean loss on masked patches only
+        loss = (loss * mask).sum() / mask.sum()  # mean loss on masked patches only
         loss_dict[self.RECON_LOSS] = loss.item()
 
         # compute fourier loss
@@ -245,58 +228,10 @@ class MAEModel(PreTrainedModel):
             )
         return loss, loss_dict
 
-    def compute_unmasked_loss(
-        self, reconstruction: torch.Tensor, img: torch.Tensor
-    ) -> Tuple[torch.Tensor, Dict[str, float]]:
-        """Computes final loss and returns specific values of component losses for metric reporting."""
-        loss_dict = {}
-        target = self.input_norm(img)
-
-        reconstruction_ = unflatten_tokens(
-            reconstruction,
-            patch_size=self.patch_size,
-            num_modalities=self.in_chans if self.encoder.channel_agnostic else 1,
-        )
-
-        loss: torch.Tensor = self.loss(reconstruction_, target)
-
-        if isinstance(loss, list):
-            raise ValueError(
-                "Unmasked loss needs to return a tensor."
-                "You may need to set reduction to 'mean' or 'sum' in your loss function."
-            )
-
-        # Take the mean of the loss if it is not already reduced to make it a scalar
-        if loss.ndim > 1:
-            loss = loss.mean()
-        loss_dict[self.RECON_LOSS] = loss.item()
-
-        # compute fourier loss
-        if self.fourier_loss_weight > 0:
-            floss: torch.Tensor = self.fourier_loss(reconstruction_, target)
-            if floss.ndim > 1:
-                floss = floss.mean()
-
-            floss = floss * self.fourier_loss_weight
-            loss_dict[self.FOURIER_LOSS] = floss.item()
-
-        # here we use a mixing factor to keep the loss magnitude appropriate with fourier
-        if self.fourier_loss_weight > 0:
-            loss = loss + floss
-        return loss, loss_dict
-
     def training_step(self, batch: TensorDict, batch_idx: int) -> TensorDict:
         img = batch["pixels"]
         latent, reconstruction, mask = self(img.clone())
-        # TODO: support configuration such that some losses are applied masked and some are not.
-        if self.apply_loss_unmasked:
-            full_loss, loss_dict = self.compute_unmasked_loss(
-                reconstruction, img.float()
-            )
-        else:
-            full_loss, loss_dict = self.compute_MAE_loss(
-                reconstruction, img.float(), mask
-            )
+        full_loss, loss_dict = self.compute_MAE_loss(reconstruction, img.float(), mask)
         return {
             "loss": full_loss,
             **loss_dict,  # type: ignore[dict-item]
