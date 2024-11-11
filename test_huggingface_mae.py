@@ -3,15 +3,15 @@ import torch
 
 from huggingface_mae import MAEModel
 
-huggingface_phenombeta_model_dir = "."
-# huggingface_modelpath = "recursionpharma/test-pb-model"
+huggingface_openphenom_model_dir = "."
+# huggingface_modelpath = "recursionpharma/OpenPhenom"
 
 
 @pytest.fixture
 def huggingface_model():
-    # Make sure you have the model/config downloaded from https://huggingface.co/recursionpharma/test-pb-model to this directory
-    # huggingface-cli download recursionpharma/test-pb-model --local-dir=.
-    huggingface_model = MAEModel.from_pretrained(huggingface_phenombeta_model_dir)
+    # Make sure you have the model/config downloaded from https://huggingface.co/recursionpharma/OpenPhenom to this directory
+    # huggingface-cli download recursionpharma/OpenPhenom --local-dir=.
+    huggingface_model = MAEModel.from_pretrained(huggingface_openphenom_model_dir)
     huggingface_model.eval()
     return huggingface_model
 
