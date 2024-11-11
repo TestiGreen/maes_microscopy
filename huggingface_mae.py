@@ -288,6 +288,6 @@ class MAEModel(PreTrainedModel):
         modelpath = f"{pretrained_model_name_or_path}/{filename}"
         config = MAEConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
         state_dict = torch.load(modelpath, map_location="cpu")
-        model = cls(config, *model_args, **kwargs)
+        model = cls(config)
         model.load_state_dict(state_dict["state_dict"])
         return model
