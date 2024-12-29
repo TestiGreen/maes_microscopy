@@ -1,38 +1,127 @@
-# Masked Autoencoders are Scalable Learners of Cellular Morphology
-Official repo for Recursion's two recently accepted papers:
-- Spotlight full-length paper at [CVPR 2024](https://cvpr.thecvf.com/Conferences/2024/AcceptedPapers) -- Masked Autoencoders for Microscopy are Scalable Learners of Cellular Biology
-  - Paper: https://arxiv.org/abs/2404.10242
-  - CVPR poster page with video: https://cvpr.thecvf.com/virtual/2024/poster/31565
-- Spotlight workshop paper at [NeurIPS 2023 Generative AI &amp; Biology workshop](https://openreview.net/group?id=NeurIPS.cc/2023/Workshop/GenBio)
-  - Paper: https://arxiv.org/abs/2309.16064
+---
+library_name: transformers
+tags: []
+---
 
-![vit_diff_mask_ratios](https://github.com/recursionpharma/maes_microscopy/assets/109550980/c15f46b1-cdb9-41a7-a4af-bdc9684a971d)
+# Model Card for OpenPhenom-S/16
+
+Channel-agnostic image encoding model CA-MAE with a ViT-S/16 encoder backbone designed for microscopy image featurization. 
+The model uses a vision transformer backbone with channelwise cross-attention over patch tokens to create contextualized representations separately for each channel.
 
 
-## Provided code
-See the repo for ingredients required for defining our MAEs. Users seeking to re-implement training will need to stitch together the Encoder and Decoder modules according to their usecase.
+## Model Details
 
-Furthermore the baseline Vision Transformer architecture backbone used in this work can be built with the following code snippet from Timm:
-```
-import timm.models.vision_transformer as vit
+### Model Description
 
-def vit_base_patch16_256(**kwargs):
-    default_kwargs = dict(
-        img_size=256,
-        in_chans=6,
-        num_classes=0,
-        fc_norm=None,
-        class_token=True,
-        drop_path_rate=0.1,
-        init_values=0.0001,
-        block_fn=vit.ParallelScalingBlock,
-        qkv_bias=False,
-        qk_norm=True,
+This model is a [channel-agnostic masked autoencoder](https://openaccess.thecvf.com/content/CVPR2024/html/Kraus_Masked_Autoencoders_for_Microscopy_are_Scalable_Learners_of_Cellular_Biology_CVPR_2024_paper.html) trained to reconstruct microscopy images over three datasets:
+1. RxRx3
+2. JUMP-CP overexpression
+3. JUMP-CP gene-knockouts
+
+- **Developed, funded, and shared by:** Recursion
+- **Model type:** Vision transformer CA-MAE
+- **Image modality:** Optimized for microscopy images from the CellPainting assay
+- **License:** [Non-Commercial End User License Agreement](https://huggingface.co/recursionpharma/OpenPhenom/blob/main/LICENSE)
+
+
+### Model Sources
+
+- **Repository:** [https://github.com/recursionpharma/maes_microscopy](https://github.com/recursionpharma/maes_microscopy)
+- **Paper:** [Masked Autoencoders for Microscopy are Scalable Learners of Cellular Biology](https://openaccess.thecvf.com/content/CVPR2024/html/Kraus_Masked_Autoencoders_for_Microscopy_are_Scalable_Learners_of_Cellular_Biology_CVPR_2024_paper.html)
+
+
+## Uses
+
+NOTE: model embeddings tend to extract features only after using standard batch correction post-processing techniques. **We recommend**, at a *minimum*, after inferencing the model over your images, to do the standard `PCA-CenterScale` pattern or better yet Typical Variation Normalization:
+
+1. Fit a PCA kernel on all the *control images* (or all images if no controls) from across all experimental batches (e.g. the plates of wells from your assay),
+2. Transform all the embeddings with that PCA kernel,
+3. For each experimental batch, fit a separate StandardScaler on the transformed embeddings of the controls from step 2, then transform the rest of the embeddings from that batch with that StandardScaler.
+
+### Direct Use
+
+- Create biologically useful embeddings of microscopy images
+- Create contextualized embeddings of each channel of a microscopy image (set `return_channelwise_embeddings=True`)
+- Leverage the full MAE encoder + decoder to predict new channels / stains for images without all 6 CellPainting channels
+
+### Downstream Use
+
+- A determined ML expert could fine-tune the encoder for downstream tasks such as classification
+
+### Out-of-Scope Use
+
+- Unlikely to be especially performant on brightfield microscopy images
+- Out-of-domain medical images, such as H&E (maybe it would be a decent baseline though)
+
+## Bias, Risks, and Limitations
+
+- Primary limitation is that the embeddings tend to be more useful at scale. For example, if you only have 1 plate of microscopy images, the embeddings might underperform compared to a supervised bespoke model.
+
+## How to Get Started with the Model
+
+You should be able to successfully run the below tests, which demonstrate how to use the model at inference time.
+
+```python
+import pytest
+import torch
+
+from huggingface_mae import MAEModel
+
+# huggingface_openphenom_model_dir = "."
+huggingface_modelpath = "recursionpharma/OpenPhenom"
+
+
+@pytest.fixture
+def huggingface_model():
+    # This step downloads the model to a local cache, takes a bit to run
+    huggingface_model = MAEModel.from_pretrained(huggingface_modelpath)
+    huggingface_model.eval()
+    return huggingface_model
+
+
+@pytest.mark.parametrize("C", [1, 4, 6, 11])
+@pytest.mark.parametrize("return_channelwise_embeddings", [True, False])
+def test_model_predict(huggingface_model, C, return_channelwise_embeddings):
+    example_input_array = torch.randint(
+        low=0,
+        high=255,
+        size=(2, C, 256, 256),
+        dtype=torch.uint8,
+        device=huggingface_model.device,
     )
-    for k, v in kwargs.items():
-        default_kwargs[k] = v
-    return vit.vit_base_patch16_224(**default_kwargs)
+    huggingface_model.return_channelwise_embeddings = return_channelwise_embeddings
+    embeddings = huggingface_model.predict(example_input_array)
+    expected_output_dim = 384 * C if return_channelwise_embeddings else 384
+    assert embeddings.shape == (2, expected_output_dim)
+```
+We also provide a [notebook](https://huggingface.co/recursionpharma/OpenPhenom/blob/main/RxRx3-core_inference.ipynb) for running inference on [RxRx3-core](https://huggingface.co/datasets/recursionpharma/rxrx3-core).
+
+## Training, evaluation and testing details
+
+See paper linked above for details on model training and evaluation. Primary hyperparameters are included in the repo linked above.
+
+
+## Environmental Impact
+
+- **Hardware Type:** Nvidia H100 Hopper nodes
+- **Hours used:** 400
+- **Cloud Provider:** private cloud
+- **Carbon Emitted:** 138.24 kg co2 (roughly the equivalent of one car driving from Toronto to Montreal)
+
+**BibTeX:**
+
+```TeX
+@inproceedings{kraus2024masked,
+  title={Masked Autoencoders for Microscopy are Scalable Learners of Cellular Biology},
+  author={Kraus, Oren and Kenyon-Dean, Kian and Saberian, Saber and Fallah, Maryam and McLean, Peter and Leung, Jess and Sharma, Vasudev and Khan, Ayla and Balakrishnan, Jia and Celik, Safiye and others},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+  pages={11757--11768},
+  year={2024}
+}
 ```
 
-## Provided models
-A publicly available model for research that handles inference and auto-scaling can be found at: https://www.rxrx.ai/phenom
+## Model Card Contact
+
+- Kian Kenyon-Dean: kian.kd@recursion.com
+- Oren Kraus: oren.kraus@recursion.com
+- Or, email: info@rxrx.ai

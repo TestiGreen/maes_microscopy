@@ -19,6 +19,7 @@ dependencies = [
     "torchvision",
     "tqdm",
     "transformers",
+    "xformers",
     "zarr",
     "pytorch-lightning>=2.1",
     "matplotlib",

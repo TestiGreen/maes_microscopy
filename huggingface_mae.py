@@ -4,12 +4,13 @@ import torch
 import torch.nn as nn
 
 from transformers import PretrainedConfig, PreTrainedModel
+from transformers.utils import cached_file
 
-from loss import FourierLoss
-from normalizer import Normalizer
-from mae_modules import CAMAEDecoder, MAEDecoder, MAEEncoder
-from mae_utils import flatten_images
-from vit import (
+from .loss import FourierLoss
+from .normalizer import Normalizer
+from .mae_modules import CAMAEDecoder, MAEDecoder, MAEEncoder
+from .mae_utils import flatten_images
+from .vit import (
     generate_2d_sincos_pos_embeddings,
     sincos_positional_encoding_vit,
     vit_small_patch16_256,
@@ -276,17 +277,17 @@ class MAEModel(PreTrainedModel):
         return latent
 
     def save_pretrained(self, save_directory: str, **kwargs):
-        filename = kwargs.pop("filename", "model.safetensors")
+        filename = kwargs.pop("filename", "models/phenom_beta_huggingface/model.safetensors")
         modelpath = f"{save_directory}/{filename}"
         self.config.save_pretrained(save_directory)
         torch.save({"state_dict": self.state_dict()}, modelpath)
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
-        filename = kwargs.pop("filename", "model.safetensors")
+        filename = kwargs.pop("filename", "models/phenom_beta_huggingface/model.safetensors")
 
-        modelpath = f"{pretrained_model_name_or_path}/{filename}"
         config = MAEConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
+        modelpath = cached_file(pretrained_model_name_or_path, filename=filename)
         state_dict = torch.load(modelpath, map_location="cpu")
         model = cls(config)
         model.load_state_dict(state_dict["state_dict"])
