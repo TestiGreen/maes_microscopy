@@ -12,7 +12,7 @@ else:
     from .huggingface_mae import MAEModel
     from .mae_utils import unflatten_tokens
 
-huggingface_phenombeta_model_dir = r"C:\Development\maes_microscopy"
+huggingface_phenombeta_model_dir = r"/"
 # huggingface_modelpath = "recursionpharma/test-pb-model"
 
 def main():

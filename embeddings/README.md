@@ -65,7 +65,7 @@ You should be able to successfully run the below tests, which demonstrate how to
 import pytest
 import torch
 
-from huggingface_mae import MAEModel
+from embeddings.huggingface_mae import MAEModel
 
 # huggingface_openphenom_model_dir = "."
 huggingface_modelpath = "recursionpharma/OpenPhenom"
