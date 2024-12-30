@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from compounds import dilirank
 from compounds.dilirank import read_dilirank_data
 
 
@@ -39,7 +40,7 @@ def test_read_dilirank_data_with_invalid_format_file(tmp_path):
     with pytest.raises(ValueError):
         read_dilirank_data(data_directory=str(data_directory), data_file=data_file)
 
-def test_read_dilirank():
+def test_read_dilirank_with_specified_data_directory():
     df = read_dilirank_data(data_directory='../../data/dilirank')
     assert isinstance(df, pd.DataFrame)
     assert not df.empty
