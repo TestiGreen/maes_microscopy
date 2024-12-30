@@ -28,9 +28,28 @@ def test_get_molecules_by_name_with_valid_name(mock_get, mock_response_ok):
     mock_get.return_value = mock_response_ok
     result = get_molecules_by_name("mercaptopurine")
     assert isinstance(result, list)
-    assert len(result) > 0
+    assert len(result) == 16
     assert result[0]["molecule_chembl_id"] == "CHEMBL1425"
     assert result[0]["pref_name"] == "MERCAPTOPURINE ANHYDROUS"
+
+
+@patch("compounds.chembl.requests.get")
+def test_get_molecules_by_name_with_valid_name_clean(mock_get, mock_response_ok):
+    mock_get.return_value = mock_response_ok
+    result = get_molecules_by_name("mercaptopurine", clean=True)
+    assert isinstance(result, list)
+    assert len(result) == 5
+
+
+@patch("compounds.chembl.requests.get")
+def test_get_molecules_by_name_with_valid_name_compact(mock_get, mock_response_ok):
+    mock_get.return_value = mock_response_ok
+    result = get_molecules_by_name("mercaptopurine", compact=True)
+    assert isinstance(result, list)
+    assert len(result) == 16
+    assert result[0]["chembl_id"] == "CHEMBL1425"
+    assert result[0]["name"] == "MERCAPTOPURINE ANHYDROUS"
+    assert result[0]["smiles"] is not None
 
 
 @patch("compounds.chembl.requests.get")
