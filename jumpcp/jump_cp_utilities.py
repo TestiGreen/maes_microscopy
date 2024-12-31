@@ -37,10 +37,10 @@ def test_get_item_location(gene):
 
 @pytest.mark.parametrize("comp", ["GLVAUDGFNGKCSF-UHFFFAOYSA-N"])
 @pytest.mark.parametrize("location", [
-            [ "Metadata_Source",
-              "Metadata_Batch",
-              "Metadata_Plate",
-              "Metadata_Well" ]
+            [ "Metadata_Source" ],
+            [  "Metadata_Batch" ],
+            [  "Metadata_Plate" ],
+            [  "Metadata_Well"  ]
          ])
 def test_download_images_for_item(comp, location):
     info_location = get_item_location_info(comp)
