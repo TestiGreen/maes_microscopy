@@ -30,3 +30,5 @@ MANIFEST
 *.pickle
 *.ckpt
 *.safetensors
+
+data/
