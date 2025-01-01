@@ -3,7 +3,8 @@ from typing import Any, Callable
 import requests
 
 CHEMBL_BASE_URL = "https://www.ebi.ac.uk/chembl/api"
-CHEMBL_MOLECULE_SEARCH = "data/molecule/search?q={}"
+CHEMBL_MOLECULE_SEARCH = "data/molecule/search?q={}" # molecule pref name
+CHEMBL_ACTIVITY_SEARCH = "data/activity/search?q={}" # chembl_id
 
 def get_molecules_by_name(name,
                           filter_noname=False,
@@ -91,6 +92,23 @@ def get_molecules_by_name(name,
         return filterer.get_compressed_notation()
     else:
         return filterer.get_molecules()
+
+def get_chemical_activity(chembl_id) -> list[dict[str, Any]]:
+    url = CHEMBL_BASE_URL + "/" + CHEMBL_ACTIVITY_SEARCH.format(chembl_id)
+
+    current_offset = 0
+    current_limit = 20
+    paging_query = '&offset={}&limit={}'.format
+
+    headers = {'Accept': 'application/json'}
+    response = requests.get(url, headers=headers)
+
+    if not response.ok:
+        raise Exception("Error fetching activities for {}: {}".format(chembl_id, response.text))
+
+    response_map = response.json()
+    return response_map["activities"]
+
 
 class MoleculeFilterer:
     """
