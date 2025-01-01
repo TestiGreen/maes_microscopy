@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Callable
 
 import requests
 
@@ -40,22 +40,33 @@ def get_molecules_by_name(name,
     }
     </code>
 
-    Parameters:
-        name (str): The name of the molecule to search for.
-        filter_noname (bool, optional): If True, removes molecules without a name (`pref_name` field).
-        filter_nosmile (bool, optional): If True, removes molecules without a SMILES string (`molecule_structures.canonical_smiles` field).
-        filter_noinchi (bool, optional): If True, removes molecules without an InChI string (`molecule_structures.standard_inchi` field).
-        filter_noinchikey (bool, optional): If True, removes molecules without an InChIKey string (`molecule_structures.standard_inchi_key` field).
-        clean (bool, optional): If True, applies all trimming filters (noname, nosmile, noinchi, noinchikey).
-        compact (bool, optional): If True, returns a compact notation of the molecules as output, otherwise returns the full JSON representation.
+    :param name: (str) The name of the molecule to search for.
+    :type name: str
+    :param filter_noname: If True, removes molecules without a name (`pref_name` field).
+    :type filter_noname: bool
+    :default filter_noname: False
+    :param filter_nosmile: If True, removes molecules without a SMILES string (`molecule_structures.canonical_smiles` field).
+    :type filter_nosmile: bool
+    :default filter_nosmile: False
+    :param filter_noinchi: If True, removes molecules without an InChI string (`molecule_structures.standard_inchi` field).
+    :type filter_noinchi: bool
+    :default filter_noinchi: False
+    :param filter_noinchikey: If True, removes molecules without an InChIKey string (`molecule_structures.standard_inchi_key` field).
+    :type filter_noinchikey: bool
+    :default filter_noinchikey: False
+    :param clean: If True, applies all trimming filters (noname, nosmile, noinchi, noinchikey).
+    :type clean: bool
+    :default clean: False
+    :param compact: (bool, optional) If True, returns a compact notation of the molecules as output, otherwise returns the full JSON representation.
+    :type compact: bool
+    default compact: False
 
-    Returns:
-        list: Returns a list of molecules if `compact` is False, otherwise returns a
-        compact representation in the form of a dictionary.
+    :return: Returns a list of molecules if `compact` is False, otherwise returns a
+            compact representation in the form of a dictionary.
+    :rtype: list[dict[str, Any]] or dict[str, Any]
 
-    Raises:
-        Exception: If the request to fetch molecules fails, an exception is raised containing
-        the error message from the response.
+    :raise: If the request to fetch molecules fails, an exception is raised containing
+                      the error message from the response.
     """
     url = CHEMBL_BASE_URL + "/" + CHEMBL_MOLECULE_SEARCH.format(name)
     headers = {'Accept': 'application/json'}
@@ -82,35 +93,131 @@ def get_molecules_by_name(name,
         return filterer.get_molecules()
 
 class MoleculeFilterer:
+    """
+    A class for filtering and processing a list of molecular data.
+
+    This class is designed to handle a collection of molecules represented as
+    dictionaries and provides methods to filter out invalid or incomplete molecular
+    entries based on specific criteria such as the presence of a name, SMILES,
+    InChI, or InChI key. It also facilitates retrieving the processed molecular data
+    and generating a condensed representation of key properties in the molecules.
+    """
     def __init__(self, molecules: list[dict[str, Any]]):
+        """
+        Represents a container for storing molecular data. The class provides
+        functionality to initialize and maintain a collection of molecule
+        information in a structured way.
+
+        :param molecules: A list containing dictionary representations of molecules.
+         Each dictionary represents a molecule with its associated properties
+         and data.  The structure of the dictionary should be the same as what comes
+         from the CHEMBL API.
+         :type molecules: list[dict[str, Any]]
+        """
         self.__molecules = molecules
 
     def trim_without_name(self):
+        """
+        Filters out molecules that do not have a preferred name (pref_name property) and updates the instance's
+        molecule list accordingly.
+
+        :return: The current instance with molecules that have a preferred name.
+        :rtype: MoleculeFilterer
+        """
         self.__molecules = filter(lambda m: m["pref_name"] is not None, self.__molecules)
         return self
 
     def trim_without_smiles(self):
+        """
+        Filters out molecules that do not have valid molecule structures or canonical SMILES strings
+        from the internal dataset. This function ensures that only molecules with complete
+        and valid structural information are retained in the collection.
+
+        :return: Returns the instance of the class with filtered molecule data.
+        :rtype: MoleculeFilterer
+        """
         self.__molecules = filter(lambda m: m["molecule_structures"] is not None and
                                             m["molecule_structures"]["canonical_smiles"] is not None, self.__molecules)
         return self
 
     def trim_without_inchi(self):
+        """
+        Filters out molecules that do not have a valid standard InChI.  Molecules without the "molecule_structures"
+        definition will also be removed.
+
+        :return: Returns the current instance of the class after filtering the
+            molecules.
+        :rtype: MoleculeFilterer
+        """
         self.__molecules = filter(lambda m: m["molecule_structures"] is not None and
                                             m["molecule_structures"]["standard_inchi"] is not None, self.__molecules)
         return self
 
     def trim_without_inchi_key(self):
+        """
+        Filters out molecules from the current molecule collection that do not contain
+        a valid "molecule_structures" entry or a "standard_inchi_key" key.
+
+        :return: Returns the current object instance with filtered molecules.
+        rtype: MoleculeFilterer
+        """
         self.__molecules = filter(lambda m: m["molecule_structures"] is not None and
                                             m["molecule_structures"]["standard_inchi_key"] is not None, self.__molecules)
         return self
 
     def clean(self):
+        """
+        Cleans the dataset by applying each of `trim...` operations.
+
+        :return: The cleaned dataset with all invalid entries removed.
+        :rtype: MoleculeFilterer
+        """
         return self.trim_without_name().trim_without_smiles().trim_without_inchi().trim_without_inchi_key()
 
+    def trim_on_predicate(self, predicate: Callable[[dict[str, Any]], bool]):
+        """
+        Filters the internal list of dictionaries based on a given predicate function.
+        This method iterates through the list and keeps only those entries for which
+        the predicate function returns `True`.
+
+        :param predicate: A callable that takes a dictionary and returns a boolean value.
+                          Determines whether an entry should be included in the final list.
+        :return: The current object instance with filtered molecules.
+        :rtype: MoleculeFilterer
+        """
+        self.__molecules = filter(predicate, self.__molecules)
+        return self
+
     def get_molecules(self) -> list[dict[str, Any]]:
+        """
+        Retrieves the list of stored molecule data in their current state.
+
+        This method provides access to the internally stored molecules in the form
+        of a list of dictionaries. Each dictionary contains information representing
+        a molecule in the format returned by the CHEMBL API.  This is a snapshot of the
+        list - further filtering of the list after calling this method will not be
+        reflected in the returned list, and filterning the returned list will not change
+        the values stored internally in this class.
+
+        :return: A list of dictionaries, where each dictionary represents a molecule.
+        :rtype: list[dict[str, Any]]
+        """
         return list(self.__molecules)
 
     def get_compressed_notation(self) -> list[dict[str, Any]]:
+        """
+        Generates a compressed representation of molecule-related data.
+
+        The function processes the internal list of molecule records available in the
+        attribute. It extracts a subset of details about each molecule, including key identifiers,
+        names, properties, classifications, and structural information. For molecule structures,
+        the function provides SMILES, InChI, and InChIKey if the structure data is present. It also
+        handles optional data such as synonyms and classifications.
+
+        :return: A list of dictionaries representing molecules, each containing a compressed representation of
+                 the molecule's key data.
+        :rtype: list[dict[str, Any]]
+        """
         return [
             {
                 "chembl_id": m["molecule_chembl_id"],
