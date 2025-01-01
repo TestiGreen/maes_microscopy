@@ -3,8 +3,55 @@ from typing import Any, Callable
 import requests
 
 CHEMBL_BASE_URL = "https://www.ebi.ac.uk/chembl/api"
-CHEMBL_MOLECULE_SEARCH = "data/molecule/search?q={}" # molecule pref name
-CHEMBL_ACTIVITY_SEARCH = "data/activity/search?q={}" # chembl_id
+CHEMBL_MOLECULE_SEARCH = "data/molecule?pref_name__iregex=(^{})" # molecule pref name
+CHEMBL_ACTIVITY_SEARCH = "data/activity?molecule_chembl_id__exact={}" # chembl_id
+
+
+def __fill_all_pages(base_url: str, result_key: str, identity: str) -> list[dict[str, Any]]:
+    """
+    Fetches and aggregates paginated results from a given REST API endpoint.
+
+    This function communicates with a REST API endpoint that returns paginated
+    JSON responses. It repeatedly fetches results until all pages are retrieved
+    or an error occurs. The collected data is then returned as a list of
+    dictionaries. This function is designed to work specifically with APIs that
+    use `offset` and `limit` as pagination query parameters, and `page_meta.next`
+    to indicate the presence of further pages.
+
+    :param base_url: The base URL of the API endpoint to fetch data from. It should
+        include the query parameters, excluding pagination-related parameters.
+    :param result_key: The key in the JSON response that contains the actual data
+        to be aggregated across pages.
+    :param identity: A string identifier used for logging purposes in case of
+        errors.
+    :return: A list of dictionaries representing the aggregated results fetched
+        from all available pages of the API.
+    """
+    headers = {'Accept': 'application/json'}
+    current_offset = 0
+    current_limit = 20
+
+    results = []
+    while True:
+        paging_query = '&offset={}&limit={}'.format(current_offset, current_limit)
+        response = requests.get(base_url + paging_query, headers=headers)
+
+        if not response.ok:
+            print("\033[33mWARNING:\033[0m Error fetching results for {}: {}.\n"
+                  "\tReturning any already fetched results..."
+                  .format(identity, response.text))
+            break
+
+        response_map = response.json()
+        results.extend(response_map[result_key])
+
+        if response_map["page_meta"]["next"] is None:
+            break
+        else:
+            current_offset += current_limit
+
+    return results
+
 
 def get_molecules_by_name(name,
                           filter_noname=False,
@@ -70,14 +117,9 @@ def get_molecules_by_name(name,
                       the error message from the response.
     """
     url = CHEMBL_BASE_URL + "/" + CHEMBL_MOLECULE_SEARCH.format(name)
-    headers = {'Accept': 'application/json'}
-    response = requests.get(url, headers=headers)
 
-    if not response.ok:
-        raise Exception("Error fetching molecules by name: {}".format(response.text))
+    molecules = __fill_all_pages(url, "molecules", name)
 
-    response_map = response.json()
-    molecules = response_map["molecules"]
     filterer = MoleculeFilterer(molecules)
     if filter_noname or clean:
         filterer.trim_without_name()
@@ -94,20 +136,25 @@ def get_molecules_by_name(name,
         return filterer.get_molecules()
 
 def get_chemical_activity(chembl_id) -> list[dict[str, Any]]:
+    """
+    Fetches chemical activity data for the given ChEMBL ID from the ChEMBL API.
+
+    This function searches the ChEMBL database for activities with the provided ChEMBL ID.
+    This may provide more hits that are directly related to the expected chemical, iterating through paginated results to fetch all activity entries.
+    If the API request fails during any iteration, the function will log a warning
+    message and return any successfully fetched activities up to that point.
+    The data fetched is returned as a list of dictionaries, with each dictionary
+    containing details of a specific chemical activity.
+
+    :param chembl_id: The ChEMBL identifier for the desired chemical entity.
+    :type chembl_id: str
+    :return: A list of dictionaries where each dictionary contains chemical
+        activity details. If there is an error during data retrieval, the result
+        will include only successfully fetched activities.
+    :rtype: list[dict[str, Any]]
+    """
     url = CHEMBL_BASE_URL + "/" + CHEMBL_ACTIVITY_SEARCH.format(chembl_id)
-
-    current_offset = 0
-    current_limit = 20
-    paging_query = '&offset={}&limit={}'.format
-
-    headers = {'Accept': 'application/json'}
-    response = requests.get(url, headers=headers)
-
-    if not response.ok:
-        raise Exception("Error fetching activities for {}: {}".format(chembl_id, response.text))
-
-    response_map = response.json()
-    return response_map["activities"]
+    return __fill_all_pages(url, "activities", chembl_id)
 
 
 class MoleculeFilterer:
