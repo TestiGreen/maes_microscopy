@@ -5,6 +5,24 @@ import pandas as pd
 from pathlib import Path
 
 def collect_compounds() -> pd.DataFrame:
+    """
+    Collects and processes compound data by integrating information from the DILIrank dataset and
+    retrieving corresponding chemical information via ChEMBL. 
+
+    This function reads the DILIrank dataset, iterates through each compound in the dataset, and 
+    retrieves matching molecule data from ChEMBL using their names. Retrieved compound data is 
+    merged with the original DILIrank dataset and returned as a combined dataframe for further 
+    analysis.
+
+    :raises IOError: If DILIrank data cannot be read.
+    :raises Exception: If there are issues with retrieving data from ChEMBL.
+    :raises ValueError: If the merging operation fails due to mismatched or missing keys.
+
+    :return: A DataFrame containing the original DILIrank data augmented with chemical
+        information retrieved from ChEMBL for the compounds. The returned DataFrame
+        has the compound name as the key to merge the datasets.
+    :rtype: pd.DataFrame
+    """
     dilirank_df = read_dilirank_data()
 
 
@@ -32,11 +50,26 @@ def collect_compounds() -> pd.DataFrame:
     return pd.merge(dilirank_df, pd.DataFrame(chembl_data), on='Compound Name', how='left')
 
 
-def store_compounds(df: pd.DataFrame):
-    store_path = Path('.', 'data', 'chembl')
+def store_compounds(df: pd.DataFrame, data_directory: str='./data', data_file: str='diliranked_compounds'):
+    """
+    Stores a DataFrame containing compound data into a CSV file. If the output directory
+    does not exist, it creates the necessary subdirectory structure before storing the file.
+
+    :param df: A pandas DataFrame containing compound data to be saved.
+    :type df: pandas.DataFrame
+    :param data_directory: The directory where the CSV file will be stored.
+    :type data_directory: str
+    :default data_directory: ./data (relative to the current working directory)
+    :param data_file: The name of the file where the DataFrame will be saved (the .csv extension is added automatically).
+    :type data_file: str
+    :default data_file: 'diliranked_compounds.csv'
+    
+    :return: None
+    """
+    store_path = Path(data_directory, 'chembl')
     if not store_path.exists():
         store_path.mkdir()
-    df.to_csv(Path(store_path, 'diliranked_compounds.csv'), index=False)
+    df.to_csv(Path(store_path, data_file + ".csv"), index=False)
 
 if __name__ == "__main__":
     compound_df = collect_compounds()
