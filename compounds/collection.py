@@ -1,5 +1,6 @@
 from dilirank import read_dilirank_data
 from chembl import get_molecules_by_name
+from storage import db_storer
 
 import pandas as pd
 from pathlib import Path
@@ -23,7 +24,7 @@ def collect_compounds() -> pd.DataFrame:
         has the compound name as the key to merge the datasets.
     :rtype: pd.DataFrame
     """
-    dilirank_df = read_dilirank_data()
+    dilirank_df = read_dilirank_data().head(10)
 
 
     chembl_data = []
@@ -50,7 +51,7 @@ def collect_compounds() -> pd.DataFrame:
     return pd.merge(dilirank_df, pd.DataFrame(chembl_data), on='Compound Name', how='left')
 
 
-def store_compounds(df: pd.DataFrame, data_directory: str='./data', data_file: str='diliranked_compounds'):
+def save_compounds(df: pd.DataFrame, data_directory: str='./data', data_file: str='diliranked_compounds'):
     """
     Stores a DataFrame containing compound data into a CSV file. If the output directory
     does not exist, it creates the necessary subdirectory structure before storing the file.
@@ -71,7 +72,13 @@ def store_compounds(df: pd.DataFrame, data_directory: str='./data', data_file: s
         store_path.mkdir()
     df.to_csv(Path(store_path, data_file + ".csv"), index=False)
 
+
+def collect_activities(compounds: list[str]) -> pd.DataFrame:
+    pass
+
 if __name__ == "__main__":
     compound_df = collect_compounds()
-    store_compounds(compound_df)
+    # save_compounds(compound_df)
+    # store_compounds(compound_df)
+    db_storer.store_compounds(compound_df)
     print("Done")

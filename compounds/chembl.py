@@ -78,13 +78,16 @@ def get_molecules_by_name(name,
         "smiles": "CC(C)C(=O)O",
         "inchi": "InChI=1S/C6H12O6/c7-6-4-2-1-3-5-6/h1-5H",
         "inchi_key": "NKGPJODWTZCHGF-KQYNXXCUSA-N",
-        "synonyms": ["synonym1", "synonym2"],
-        "atc_classifications": ["A01AA01", "A01AA02"],
+        "synonyms": "synonym1,synonym2",
+        "atc_classifications": "A01AA01,A01AA02",
         "type": "MOL",
         "natural": 1,
         "topical": False,
         "oral": False,
         "parenteral": False,
+        "properties.alogp: ...,
+        "properties.aromatic_rings: ...,
+        "properties....": ... # for each property in the molecule_properties field
     }
     </code>
 
@@ -146,7 +149,8 @@ def get_chemical_activity(chembl_id) -> list[dict[str, Any]]:
     The data fetched is returned as a list of dictionaries, with each dictionary
     containing details of a specific chemical activity.
 
-    :param chembl_id: The ChEMBL identifier for the desired chemical entity.
+    :param chembl_id: The ChEMBL identifier for the desired chemical entity.  NOTE: To facilitate speed in searching,
+                      the ID here is CASE SENSITIVE, and should be the exact identifier as returned by the ChEMBL API.
     :type chembl_id: str
     :return: A list of dictionaries where each dictionary contains chemical
         activity details. If there is an error during data retrieval, the result
@@ -283,24 +287,28 @@ class MoleculeFilterer:
                  the molecule's key data.
         :rtype: list[dict[str, Any]]
         """
-        return [
-            {
+        results = []
+        for m in self.__molecules:
+            details = {
                 "chembl_id": m["molecule_chembl_id"],
                 "name": m["pref_name"],
                 "indication_class": m["indication_class"],
                 "inorganic_flag": m["inorganic_flag"],
                 "max_phase": m["max_phase"],
-                "properties": m["molecule_properties"],
                 "smiles": m["molecule_structures"]["canonical_smiles"] if m["molecule_structures"] is not None else None,
                 "inchi": m["molecule_structures"]["standard_inchi"] if m["molecule_structures"] is not None else None,
                 "inchi_key": m["molecule_structures"]["standard_inchi_key"] if m["molecule_structures"] is not None else None,
-                "synonyms": [s["molecule_synonym"] for s in m["molecule_synonyms"]] if m["molecule_synonyms"] is not None else [],
-                "atc_classifications": m["atc_classifications"],
+                "synonyms":
+                    ",".join({s["molecule_synonym"] for s in m["molecule_synonyms"]} if m["molecule_synonyms"] is not None else []),
+                "atc_classifications":
+                    ",".join({classification for classification in m["atc_classifications"]}),
                 "type": m["molecule_type"],
                 "natural": m["natural_product"],
                 "topical": m["topical"],
                 "oral": m["oral"],
                 "parenteral": m["parenteral"],
             }
-            for m in self.__molecules
-        ]
+            if m["molecule_properties"] is not None:
+                details = {**details, **{f"properties.{k}": v for k,v in m["molecule_properties"].items()}}
+            results.append(details)
+        return results
