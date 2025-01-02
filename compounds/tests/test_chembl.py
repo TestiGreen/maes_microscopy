@@ -185,9 +185,9 @@ def test_get_chemical_activity_with_empty_response(mock_get):
 
 
 def test_get_activity_by_chemblid_integration():
-    activities = get_chemical_activity("CHEMBL1647")
+    activities = get_chemical_activity("CHEMBL505")
     assert isinstance(activities, list)
     assert len(activities) > 0
-    assert activities[0]["molecule_chembl_id"] == "CHEMBL1647"
+    assert activities[0]["molecule_chembl_id"] == "CHEMBL505"
     assert activities[0]["activity_id"] == 2357368
 

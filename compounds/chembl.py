@@ -1,13 +1,15 @@
+import sys
 from typing import Any, Callable
 
 import requests
 
-CHEMBL_BASE_URL = "https://www.ebi.ac.uk/chembl/api"
+CHEMBL_DOMAIN = "https://www.ebi.ac.uk"
+CHEMBL_BASE_URL = f"{CHEMBL_DOMAIN}/chembl/api"
 CHEMBL_MOLECULE_SEARCH = "data/molecule?pref_name__iregex=(^{})" # molecule pref name
 CHEMBL_ACTIVITY_SEARCH = "data/activity?molecule_chembl_id__exact={}" # chembl_id
 
 
-def __fill_all_pages(base_url: str, result_key: str, identity: str) -> list[dict[str, Any]]:
+def __fill_all_pages(base_url: str, result_key: str, identity: str, max_results: int=sys.maxsize) -> list[dict[str, Any]]:
     """
     Fetches and aggregates paginated results from a given REST API endpoint.
 
@@ -30,11 +32,15 @@ def __fill_all_pages(base_url: str, result_key: str, identity: str) -> list[dict
     headers = {'Accept': 'application/json'}
     current_offset = 0
     current_limit = 20
+    paging_query = '&offset={}&limit={}'.format(current_offset, current_limit)
+    next_url = base_url + paging_query
 
     results = []
-    while True:
-        paging_query = '&offset={}&limit={}'.format(current_offset, current_limit)
-        response = requests.get(base_url + paging_query, headers=headers)
+    print("\033[100X", end="", flush=True)
+    while len(results) < max_results:
+        # paging_query = '&offset={}&limit={}'.format(current_offset, current_limit)
+        # response = requests.get(base_url + paging_query, headers=headers)
+        response = requests.get(next_url, headers=headers)
 
         if not response.ok:
             print("\033[33mWARNING:\033[0m Error fetching results for {}: {}.\n"
@@ -45,10 +51,23 @@ def __fill_all_pages(base_url: str, result_key: str, identity: str) -> list[dict
         response_map = response.json()
         results.extend(response_map[result_key])
 
+        total_count = response_map["page_meta"]["total_count"]
+        total_digits = len(str(total_count))
+
+        str_len = 4 + (2*total_digits)
+        if response_map["page_meta"]["previous"] is not None:
+            print("\033[" + str(str_len) + "D", end="", flush=True)
+
+        current_done = len(results)
+        fmt_string = ' {{{:>' + str(total_digits) + '}/' + str(total_count) + '}}'
+        print(fmt_string.format(current_done), end="", flush=True)
+
+
         if response_map["page_meta"]["next"] is None:
             break
         else:
             current_offset += current_limit
+            next_url = CHEMBL_DOMAIN + "/" + response_map["page_meta"]["next"]
 
     return results
 
@@ -138,16 +157,21 @@ def get_molecules_by_name(name,
     else:
         return filterer.get_molecules()
 
-def get_chemical_activity(chembl_id) -> list[dict[str, Any]]:
+
+def get_chemical_activity(chembl_id, max_count: int=sys.maxsize) -> list[dict[str, Any]]:
     """
     Fetches chemical activity data for the given ChEMBL ID from the ChEMBL API.
 
     This function searches the ChEMBL database for activities with the provided ChEMBL ID.
-    This may provide more hits that are directly related to the expected chemical, iterating through paginated results to fetch all activity entries.
-    If the API request fails during any iteration, the function will log a warning
-    message and return any successfully fetched activities up to that point.
-    The data fetched is returned as a list of dictionaries, with each dictionary
-    containing details of a specific chemical activity.
+    This may provide more hits that are directly related to the expected chemical,
+    iterating through paginated results to fetch all activity entries.  If the API request
+    fails during any iteration, the function will log a warning message and return any
+    successfully fetched activities up to that point.  The data fetched is returned as a list
+    of dictionaries, with each dictionary containing details of a specific chemical activity.
+
+    The returned content is a 'flattened' version of the original data, with the
+    activity_properties, ligand_efficiency, and action_type fields each have their keys moved
+    to the parent dictionary and modified with an appropriate prefix.
 
     :param chembl_id: The ChEMBL identifier for the desired chemical entity.  NOTE: To facilitate speed in searching,
                       the ID here is CASE SENSITIVE, and should be the exact identifier as returned by the ChEMBL API.
@@ -158,7 +182,39 @@ def get_chemical_activity(chembl_id) -> list[dict[str, Any]]:
     :rtype: list[dict[str, Any]]
     """
     url = CHEMBL_BASE_URL + "/" + CHEMBL_ACTIVITY_SEARCH.format(chembl_id)
-    return __fill_all_pages(url, "activities", chembl_id)
+    activities =  __fill_all_pages(url, "activities", chembl_id, max_results=max_count)
+
+    results = []
+    for activity in activities:
+        if 'ligand_efficiency' in activity.keys() and activity['ligand_efficiency'] is not None:
+            ligand_efficiency_map = {**{f"ligand_efficiency.{k}": v for k, v in activity["ligand_efficiency"].items()}}
+        else:
+            ligand_efficiency_map = {}
+        del activity["ligand_efficiency"]
+
+        if 'action_type' in activity.keys() and activity['action_type'] is not None:
+            action_type_map = {**{f"action_type.{k}": v for k, v in activity["action_type"].items()}}
+        else:
+            action_type_map = {}
+        del activity["action_type"]
+
+        properties  = activity["activity_properties"]
+        del activity["activity_properties"]
+        property_map = {}
+        if properties is not None and len(properties) > 0:
+            for property in properties:
+                property_name = str(property["type"]).upper()
+                property_map[property_name] = property["value"] or property["text_value"]
+                if property["units"]:
+                    property_map[f"{property_name}_units"] = property["units"]
+
+        results.append({
+            **activity,
+            **ligand_efficiency_map,
+            **action_type_map,
+            **property_map,
+        })
+    return results
 
 
 class MoleculeFilterer:
