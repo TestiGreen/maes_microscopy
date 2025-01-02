@@ -6,11 +6,11 @@ import torch.nn as nn
 from transformers import PretrainedConfig, PreTrainedModel
 from transformers.utils import cached_file
 
-from .loss import FourierLoss
-from .normalizer import Normalizer
-from .mae_modules import CAMAEDecoder, MAEDecoder, MAEEncoder
-from .mae_utils import flatten_images
-from .vit import (
+from loss import FourierLoss
+from normalizer import Normalizer
+from mae_modules import CAMAEDecoder, MAEDecoder, MAEEncoder
+from mae_utils import flatten_images
+from vit import (
     generate_2d_sincos_pos_embeddings,
     sincos_positional_encoding_vit,
     vit_small_patch16_256,
