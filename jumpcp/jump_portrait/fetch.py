@@ -158,7 +158,47 @@ def get_jump_image_batch(
 
     return iterable, img_list
 
+def get_negative_ctrl_location_for_plate(
+        source_metadata: str,
+        plate_metadata: str,
+        neg_control_jcpcode: str = "JCP2022_033924"
+)->pl.DataFrame:
+    """
+    Retrieve the location of negative control metadata for a specific plate within a given batch and data source.
 
+    Parameters
+    ----------
+    source_metadata : str
+        Metadata related to the data source or collaborator.
+    plate_metadata : str
+        Metadata of the specific plate whose negative controls are to be located.
+    neg_control_jcpcode : str
+        The JCP2022 code used for the negative controls for this sample.  By default, this is
+        JCP_2022_033924 but can be overriden when needed.
+
+    Returns
+    -------
+    pl.DataFrame
+        A dataframe containing well-level information about negative controls in the specified plate.
+
+       """
+    meta_wells = get_table("well")
+    found_wells = meta_wells.filter(
+        pl.col("Metadata_Source").is_in(source_metadata) &
+        pl.col("Metadata_Plate").is_in(plate_metadata)   &
+        pl.col("Metadata_JCP2022").is_in([neg_control_jcpcode])
+    )
+
+
+    # Get full plate metadata with (contains no info reference about wells)
+    plate_level_metadata = get_table("plate").filter(
+        pl.col("Metadata_Plate").is_in(found_wells.select("Metadata_Plate").to_series())
+    )
+    well_level_metadata = plate_level_metadata.join(
+        found_wells,
+        on=("Metadata_Source", "Metadata_Plate"),
+    )
+    return well_level_metadata
 
 
 def get_item_location_metadata(
@@ -288,6 +328,8 @@ def get_item_location_info(
         on=("Metadata_Source", "Metadata_Batch", "Metadata_Plate"),
     )
     return joint.unique()
+
+#def get_neg_control_images():
 
 
 def get_gene_images(

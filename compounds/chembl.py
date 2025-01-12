@@ -93,6 +93,7 @@ def get_molecules_by_name(name,
     else:
         return filterer.get_molecules()
 
+
 def get_chemical_activity(chembl_id) -> list[dict[str, Any]]:
     url = CHEMBL_BASE_URL + "/" + CHEMBL_ACTIVITY_SEARCH.format(chembl_id)
 
