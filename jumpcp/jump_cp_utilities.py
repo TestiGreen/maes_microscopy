@@ -81,7 +81,8 @@ def download_images_for_compound(comp, location, comp_folder):
     info_location = get_item_location_info(comp)
     sub_location_df = info_location.select(location).unique()
     print(sub_location_df)
-    meta_array = download_images_for_location(comp_folder, sub_location_df)
+    comp_save_folder = os.path.join(comp_folder, comp)
+    meta_array = download_images_for_location(comp_save_folder, sub_location_df)
 
     # Convert meta_array into a DataFrame and save it as a CSV file
     meta_df = pd.DataFrame(meta_array)

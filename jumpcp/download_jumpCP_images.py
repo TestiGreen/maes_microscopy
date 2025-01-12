@@ -14,13 +14,13 @@ def download_control_images(meta_df):
     data_source_ids = meta_df[['Metadata_Source', 'Metadata_Plate']].drop_duplicates()
 
     # Create folders based on Metadata_Source and Metadata_Plate
-    for _, row in data_source_ids:
-        control_plate_folder_name = os.path.join(image_dir, f"{row['Metadata_Source']}_{row['Metadata_Plate']}")
+    for row in data_source_ids.itertuples():
+        control_plate_folder_name = os.path.join(image_dir, f"{row.Metadata_Source}_{row.Metadata_Plate}")
         if not os.path.exists(control_plate_folder_name):
             # if the control plate folder exists, means the control images have been downloaded already
             os.makedirs(control_plate_folder_name)
             location_df = jcp_utils.get_negative_ctrl_location_for_plate(row['Metadata_Source'], row['Metadata_Plate']).unique()
-            jcp_utils.download_images_for_location(location_df)
+            jcp_utils.download_images_for_location(control_plate_folder_name, location_df)
             location_df.to_csv(os.path.join(control_plate_folder_name, "meta.csv"), index=True)
 
 
@@ -30,6 +30,9 @@ def download_control_images(meta_df):
 
 def download_dili_images(comp_file_path):
     df = pd.read_csv(comp_file_path)
+
+    df = df.head(3)
+
     image_dir = r"../data/images/Dili"
     if not os.path.exists(image_dir):
         os.makedirs(image_dir)
