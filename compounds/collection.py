@@ -1,8 +1,45 @@
+import sys
+
 from dilirank import read_dilirank_data
-from chembl import get_molecules_by_name
+from chembl import get_molecules_by_name, get_chemical_activity
+from storage import db_storer
 
 import pandas as pd
 from pathlib import Path
+
+# When DEBUG_MODE is True, few, randomly sampled compounds will be processed, and fewer activities per
+# compound will be processed to make test routines faster.
+DEBUG_MODE = True
+
+
+def __update_progress(idx, total, txt_1, txt_2):
+    """
+    Updates and displays a progress bar in the terminal with a specific color based on the
+    completion percentage. The progress bar showcases the current progress towards the total
+    goal, while also displaying descriptive texts to provide more information about the
+    current state.
+
+    :param idx: Current progress value, representing the current count or step of the progress.
+    :type idx: int
+    :param total: The total value or steps to reach 100% completion of the progress bar.
+    :type total: int
+    :param txt_1: A string to be presented after the progress bar, providing additional context.
+    :type txt_1: str
+    :param txt_2: Another string displayed at the end of the progress bar, offering further
+        details or clarification.
+    :type txt_2: str
+    :return: None
+    """
+    pixels = 40
+    pct = idx / total
+    done = int(pct * pixels)
+
+    print("\r", end="")  # Reset to the start of the line (re-use same line for progress)
+    # Color of progress bar: Yellow in 1st third, blue in 2nd third, and green in final third.
+    color = "\033[33m" if pct < 0.33 else ("\033[34m" if pct < 0.66 else "\033[32m")
+    fmt_string = "{:>4}/{:>4}[" + color + "{:<" + str(pixels) + "}\033[0m] {}: {}"
+    print(fmt_string.format(idx, total, "*" * done, txt_1, txt_2), end="", flush=True)
+
 
 def collect_compounds() -> pd.DataFrame:
     """
@@ -25,32 +62,28 @@ def collect_compounds() -> pd.DataFrame:
     """
     dilirank_df = read_dilirank_data()
 
+    if DEBUG_MODE:
+        dilirank_df = dilirank_df.sample(n=10)
 
     chembl_data = []
     total = len(dilirank_df)
-    pixels = 40 # Number of characters for the progress bar
     for idx, compound in enumerate(dilirank_df.itertuples()):
-        pct = (idx+1) / total
-        done =int(pct*pixels)
         compound_name = compound._2
         chembl_compounds = get_molecules_by_name(compound_name, clean=True, compact=True)
 
-        print("\r", end="") # Reset to the start of the line (re-use same line for progress)
-        # Color of progress bar: Yellow in 1st third, blue in 2nd third, and green in final third.
-        color = "\033[33m" if pct < 0.33 else ("\033[34m" if pct < 0.66 else "\033[32m")
-        fmt_string = "{:>4}/{:>4}[" + color + "{:<" + str(pixels) + "}\033[0m] {}: {}"
-        print(fmt_string.format(idx+1, total, "*" * done, compound_name, len(chembl_compounds)), end="", flush=True)
+        __update_progress(idx+1, total, compound_name, '')
 
         for chembl_compound in chembl_compounds:
-            print(".", end="", flush=True)
+            # print(".", end="", flush=True)
             chembl_data.append({
                 "Compound Name": compound_name,
                 **chembl_compound
             })
+    print("")
     return pd.merge(dilirank_df, pd.DataFrame(chembl_data), on='Compound Name', how='left')
 
 
-def store_compounds(df: pd.DataFrame, data_directory: str='./data', data_file: str='diliranked_compounds'):
+def save_compounds(df: pd.DataFrame, data_directory: str='./data', data_file: str='diliranked_compounds'):
     """
     Stores a DataFrame containing compound data into a CSV file. If the output directory
     does not exist, it creates the necessary subdirectory structure before storing the file.
@@ -71,7 +104,44 @@ def store_compounds(df: pd.DataFrame, data_directory: str='./data', data_file: s
         store_path.mkdir()
     df.to_csv(Path(store_path, data_file + ".csv"), index=False)
 
+
+def collect_activities(compounds_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Collects activities associated with the provided compounds.
+
+    This function processes a DataFrame of compounds, retrieves their unique
+    compound IDs, and gathers their respective activity data. It also tracks
+    the progress of data collection and updates the progress accordingly.
+    The retrieved activity information is aggregated into a new DataFrame,
+    which is then returned to the caller.
+
+    :param compounds_df: A DataFrame containing compound data, where each
+        compound is expected to have a 'chembl_id' column.
+    :type compounds_df: pd.DataFrame
+    :return: A DataFrame containing chemical activity data for the compounds
+        provided in the input. Each row in the DataFrame corresponds to an
+        activity record, and each has a column named CHEMBL_ID for the compound it applies to.
+    :rtype: pd.DataFrame
+    """
+    compound_ids = compounds_df['chembl_id'].unique().tolist()
+
+    activities = []
+    total = len(compound_ids)
+    for idx, compound_id in enumerate(compound_ids):
+        __update_progress(idx, total, compound_id, "")
+
+        cmpd_activities = [{"chembl_id": compound_id, **activity}
+                           for activity in get_chemical_activity(compound_id, 50 if DEBUG_MODE else sys.maxsize)]
+        activities.extend(cmpd_activities)
+
+        __update_progress(idx+1, total, compound_id, str(len(cmpd_activities)))
+
+    activity_df = pd.DataFrame(activities)
+    print("")
+    return activity_df
+
 if __name__ == "__main__":
     compound_df = collect_compounds()
-    store_compounds(compound_df)
+    db_storer.store_compounds(compound_df)
+    db_storer.store_activities(collect_activities(compound_df), new_db=True)
     print("Done")

@@ -1,10 +1,76 @@
+import sys
 from typing import Any, Callable
 
 import requests
 
-CHEMBL_BASE_URL = "https://www.ebi.ac.uk/chembl/api"
-CHEMBL_MOLECULE_SEARCH = "data/molecule/search?q={}" # molecule pref name
-CHEMBL_ACTIVITY_SEARCH = "data/activity/search?q={}" # chembl_id
+CHEMBL_DOMAIN = "https://www.ebi.ac.uk"
+CHEMBL_BASE_URL = f"{CHEMBL_DOMAIN}/chembl/api"
+CHEMBL_MOLECULE_SEARCH = "data/molecule?pref_name__iregex=(^{})" # molecule pref name
+CHEMBL_ACTIVITY_SEARCH = "data/activity?molecule_chembl_id__exact={}" # chembl_id
+
+
+def __fill_all_pages(base_url: str, result_key: str, identity: str, max_results: int=sys.maxsize) -> list[dict[str, Any]]:
+    """
+    Fetches and aggregates paginated results from a given REST API endpoint.
+
+    This function communicates with a REST API endpoint that returns paginated
+    JSON responses. It repeatedly fetches results until all pages are retrieved
+    or an error occurs. The collected data is then returned as a list of
+    dictionaries. This function is designed to work specifically with APIs that
+    use `offset` and `limit` as pagination query parameters, and `page_meta.next`
+    to indicate the presence of further pages.
+
+    :param base_url: The base URL of the API endpoint to fetch data from. It should
+        include the query parameters, excluding pagination-related parameters.
+    :param result_key: The key in the JSON response that contains the actual data
+        to be aggregated across pages.
+    :param identity: A string identifier used for logging purposes in case of
+        errors.
+    :return: A list of dictionaries representing the aggregated results fetched
+        from all available pages of the API.
+    """
+    headers = {'Accept': 'application/json'}
+    current_offset = 0
+    current_limit = 20
+    paging_query = '&offset={}&limit={}'.format(current_offset, current_limit)
+    next_url = base_url + paging_query
+
+    results = []
+    print("\033[100X", end="", flush=True)
+    while len(results) < max_results:
+        # paging_query = '&offset={}&limit={}'.format(current_offset, current_limit)
+        # response = requests.get(base_url + paging_query, headers=headers)
+        response = requests.get(next_url, headers=headers)
+
+        if not response.ok:
+            print("\033[33mWARNING:\033[0m Error fetching results for {}: {}.\n"
+                  "\tReturning any already fetched results..."
+                  .format(identity, response.text))
+            break
+
+        response_map = response.json()
+        results.extend(response_map[result_key])
+
+        total_count = response_map["page_meta"]["total_count"]
+        total_digits = len(str(total_count))
+
+        str_len = 4 + (2*total_digits)
+        if response_map["page_meta"]["previous"] is not None:
+            print("\033[" + str(str_len) + "D", end="", flush=True)
+
+        current_done = len(results)
+        fmt_string = ' {{{:>' + str(total_digits) + '}/' + str(total_count) + '}}'
+        print(fmt_string.format(current_done), end="", flush=True)
+
+
+        if response_map["page_meta"]["next"] is None:
+            break
+        else:
+            current_offset += current_limit
+            next_url = CHEMBL_DOMAIN + "/" + response_map["page_meta"]["next"]
+
+    return results
+
 
 def get_molecules_by_name(name,
                           filter_noname=False,
@@ -31,13 +97,16 @@ def get_molecules_by_name(name,
         "smiles": "CC(C)C(=O)O",
         "inchi": "InChI=1S/C6H12O6/c7-6-4-2-1-3-5-6/h1-5H",
         "inchi_key": "NKGPJODWTZCHGF-KQYNXXCUSA-N",
-        "synonyms": ["synonym1", "synonym2"],
-        "atc_classifications": ["A01AA01", "A01AA02"],
+        "synonyms": "synonym1,synonym2",
+        "atc_classifications": "A01AA01,A01AA02",
         "type": "MOL",
         "natural": 1,
         "topical": False,
         "oral": False,
         "parenteral": False,
+        "properties.alogp: ...,
+        "properties.aromatic_rings: ...,
+        "properties....": ... # for each property in the molecule_properties field
     }
     </code>
 
@@ -70,14 +139,9 @@ def get_molecules_by_name(name,
                       the error message from the response.
     """
     url = CHEMBL_BASE_URL + "/" + CHEMBL_MOLECULE_SEARCH.format(name)
-    headers = {'Accept': 'application/json'}
-    response = requests.get(url, headers=headers)
 
-    if not response.ok:
-        raise Exception("Error fetching molecules by name: {}".format(response.text))
+    molecules = __fill_all_pages(url, "molecules", name)
 
-    response_map = response.json()
-    molecules = response_map["molecules"]
     filterer = MoleculeFilterer(molecules)
     if filter_noname or clean:
         filterer.trim_without_name()
@@ -94,21 +158,63 @@ def get_molecules_by_name(name,
         return filterer.get_molecules()
 
 
-def get_chemical_activity(chembl_id) -> list[dict[str, Any]]:
+def get_chemical_activity(chembl_id, max_count: int=sys.maxsize) -> list[dict[str, Any]]:
+    """
+    Fetches chemical activity data for the given ChEMBL ID from the ChEMBL API.
+
+    This function searches the ChEMBL database for activities with the provided ChEMBL ID.
+    This may provide more hits that are directly related to the expected chemical,
+    iterating through paginated results to fetch all activity entries.  If the API request
+    fails during any iteration, the function will log a warning message and return any
+    successfully fetched activities up to that point.  The data fetched is returned as a list
+    of dictionaries, with each dictionary containing details of a specific chemical activity.
+
+    The returned content is a 'flattened' version of the original data, with the
+    activity_properties, ligand_efficiency, and action_type fields each have their keys moved
+    to the parent dictionary and modified with an appropriate prefix.
+
+    :param chembl_id: The ChEMBL identifier for the desired chemical entity.  NOTE: To facilitate speed in searching,
+                      the ID here is CASE SENSITIVE, and should be the exact identifier as returned by the ChEMBL API.
+    :type chembl_id: str
+    :return: A list of dictionaries where each dictionary contains chemical
+        activity details. If there is an error during data retrieval, the result
+        will include only successfully fetched activities.
+    :rtype: list[dict[str, Any]]
+    """
     url = CHEMBL_BASE_URL + "/" + CHEMBL_ACTIVITY_SEARCH.format(chembl_id)
+    activities =  __fill_all_pages(url, "activities", chembl_id, max_results=max_count)
 
-    current_offset = 0
-    current_limit = 20
-    paging_query = '&offset={}&limit={}'.format
+    results = []
+    for activity in activities:
+        if 'ligand_efficiency' in activity.keys() and activity['ligand_efficiency'] is not None:
+            ligand_efficiency_map = {**{f"ligand_efficiency.{k}": v for k, v in activity["ligand_efficiency"].items()}}
+        else:
+            ligand_efficiency_map = {}
+        del activity["ligand_efficiency"]
 
-    headers = {'Accept': 'application/json'}
-    response = requests.get(url, headers=headers)
+        if 'action_type' in activity.keys() and activity['action_type'] is not None:
+            action_type_map = {**{f"action_type.{k}": v for k, v in activity["action_type"].items()}}
+        else:
+            action_type_map = {}
+        del activity["action_type"]
 
-    if not response.ok:
-        raise Exception("Error fetching activities for {}: {}".format(chembl_id, response.text))
+        properties  = activity["activity_properties"]
+        del activity["activity_properties"]
+        property_map = {}
+        if properties is not None and len(properties) > 0:
+            for property in properties:
+                property_name = str(property["type"]).upper()
+                property_map[property_name] = property["value"] or property["text_value"]
+                if property["units"]:
+                    property_map[f"{property_name}_units"] = property["units"]
 
-    response_map = response.json()
-    return response_map["activities"]
+        results.append({
+            **activity,
+            **ligand_efficiency_map,
+            **action_type_map,
+            **property_map,
+        })
+    return results
 
 
 class MoleculeFilterer:
@@ -237,24 +343,28 @@ class MoleculeFilterer:
                  the molecule's key data.
         :rtype: list[dict[str, Any]]
         """
-        return [
-            {
+        results = []
+        for m in self.__molecules:
+            details = {
                 "chembl_id": m["molecule_chembl_id"],
                 "name": m["pref_name"],
                 "indication_class": m["indication_class"],
                 "inorganic_flag": m["inorganic_flag"],
                 "max_phase": m["max_phase"],
-                "properties": m["molecule_properties"],
                 "smiles": m["molecule_structures"]["canonical_smiles"] if m["molecule_structures"] is not None else None,
                 "inchi": m["molecule_structures"]["standard_inchi"] if m["molecule_structures"] is not None else None,
                 "inchi_key": m["molecule_structures"]["standard_inchi_key"] if m["molecule_structures"] is not None else None,
-                "synonyms": [s["molecule_synonym"] for s in m["molecule_synonyms"]] if m["molecule_synonyms"] is not None else [],
-                "atc_classifications": m["atc_classifications"],
+                "synonyms":
+                    ",".join({s["molecule_synonym"] for s in m["molecule_synonyms"]} if m["molecule_synonyms"] is not None else []),
+                "atc_classifications":
+                    ",".join({classification for classification in m["atc_classifications"]}),
                 "type": m["molecule_type"],
                 "natural": m["natural_product"],
                 "topical": m["topical"],
                 "oral": m["oral"],
                 "parenteral": m["parenteral"],
             }
-            for m in self.__molecules
-        ]
+            if m["molecule_properties"] is not None:
+                details = {**details, **{f"properties.{k}": v for k,v in m["molecule_properties"].items()}}
+            results.append(details)
+        return results
