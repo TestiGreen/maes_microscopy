@@ -88,7 +88,7 @@ def download_images_for_compound(comp, location, comp_folder):
     meta_df = pd.DataFrame(meta_array)
     meta_df.columns = ["Metadata_Source", "Metadata_Batch", "Metadata_Plate", "Metadata_Well", "Channel", "Site",
                        "Correction"]
-    meta_df.to_csv(os.path.join(comp_folder, "meta.csv"), index=True)
+    meta_df.to_csv(os.path.join(comp_save_folder, "meta.csv"), index=True)
     return meta_df
 
 
@@ -104,6 +104,8 @@ def download_images_for_location(file_folder, sub_location_df):
     correction = "Orig"  # or "Illum"
     verbose = True  # whether to have tqdm loading bar
     meta_array, img_array = get_jump_image_batch(sub_location_df, channel, site, correction, verbose)
+    print(meta_array)
+    print(f'length of image array is {len(img_array)}')
     assert (len(meta_array) == len(img_array))
     # Import required for directory creation
     # Create folder in the ../data/images directory using the value of comp
@@ -113,7 +115,7 @@ def download_images_for_location(file_folder, sub_location_df):
         valid_result = is_valid_numpy_array(img)
         if valid_result[0]:
             np.save(os.path.join(file_folder, f"img_{idx}.npy"), img, allow_pickle=True)
-            tiff.imwrite(os.path.join(file_folder, f"img_{idx}.tiff"), img)
+            #tiff.imwrite(os.path.join(file_folder, f"img_{idx}.tiff"), img)
         else:
             print(valid_result[1])
     return meta_array
@@ -139,6 +141,9 @@ def test_npy_data():
     np_data = np.load(file_path)
     tiff.imwrite(os.path.join(os.path.dirname(file_path), f"recover.tiff"), np_data)
     print(np_data.shape)
+
+
+
 
 @pytest.mark.parametrize("meta_source", [["source_8"]])
 @pytest.mark.parametrize("meta_plate", [["A1170540"]])

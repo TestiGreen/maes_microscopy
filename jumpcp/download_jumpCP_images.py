@@ -19,9 +19,10 @@ def download_control_images(meta_df):
         if not os.path.exists(control_plate_folder_name):
             # if the control plate folder exists, means the control images have been downloaded already
             os.makedirs(control_plate_folder_name)
-            location_df = jcp_utils.get_negative_ctrl_location_for_plate(row['Metadata_Source'], row['Metadata_Plate']).unique()
+            location_df = jcp_utils.get_negative_ctrl_location_for_plate(row.Metadata_Source, row.Metadata_Plate).unique()
             jcp_utils.download_images_for_location(control_plate_folder_name, location_df)
-            location_df.to_csv(os.path.join(control_plate_folder_name, "meta.csv"), index=True)
+            
+            location_df.write_csv(os.path.join(control_plate_folder_name, "meta.csv"))
 
 
 
@@ -31,7 +32,7 @@ def download_control_images(meta_df):
 def download_dili_images(comp_file_path):
     df = pd.read_csv(comp_file_path)
 
-    df = df.head(3)
+    df = df.head(1)
 
     image_dir = r"../data/images/Dili"
     if not os.path.exists(image_dir):
@@ -39,11 +40,16 @@ def download_dili_images(comp_file_path):
     location = ["Metadata_Source", "Metadata_Batch", "Metadata_Plate", "Metadata_Well"]
     for inchi_key in df['inchi_key']:
         meta_df = jcp_utils.download_images_for_compound(inchi_key, location, image_dir)
+        #meta_df = pd.read_csv(r'C:\Development\PyRate Cell Painting\data\Images\Dili\meta_single.csv')
         download_control_images(meta_df)
 
-
+def test_save_negative_control_images():
+    meta_file = r'C:\Development\PyRate Cell Painting\data\Images\Dili\meta.csv'
+    meta_df = pd.read_csv(meta_file)
+    download_control_images(meta_df)
 
 if __name__ == "__main__":
-    dili_file_path = r"../data/chembl/diliranked_compounds.csv"
-    download_dili_images(dili_file_path)
+   dili_file_path = r"../data/chembl/diliranked_compounds.csv"
+   download_dili_images(dili_file_path)
+   #test_save_negative_control_images()
 

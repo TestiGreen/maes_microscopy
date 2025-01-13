@@ -99,15 +99,24 @@ def get_jump_image(
     s3_location_frame_uri = format_cellpainting_s3().format(
         Metadata_Source=source, Metadata_Batch=batch, Metadata_Plate=plate
     )
+
+    print(f'debug get s3_location_frame_uri :{s3_location_frame_uri}')
     location_frame = read_parquet_s3(s3_location_frame_uri)
+    print(f'debug get location frame :{location_frame}: well {well} site: {site}')
+    if source == "source_6":
+        output_path = f'C:/Development/PyRate Cell Painting/data/Images/Control/{source}_w{well}_s{site}.csv'
+        location_frame.write_csv(output_path)
+
+
     unique_site = location_frame.filter(
         (pl.col("Metadata_Well") == well) & (pl.col("Metadata_Site") == str(site))
     )
+    print(f'debug get unique site :{unique_site}')
 
     assert len(unique_site) == 1, "More than one site found"
-
+    print(f'after assert')
     first_row = unique_site.row(0, named=True)
-
+    print(f'debug get first row :{first_row}')
     # Compressed images are already corrected
     if compressed:
         correction = None
@@ -184,8 +193,8 @@ def get_negative_ctrl_location_for_plate(
        """
     meta_wells = get_table("well")
     found_wells = meta_wells.filter(
-        pl.col("Metadata_Source").is_in(source_metadata) &
-        pl.col("Metadata_Plate").is_in(plate_metadata)   &
+        pl.col("Metadata_Source").is_in([source_metadata]) &
+        pl.col("Metadata_Plate").is_in([plate_metadata])   &
         pl.col("Metadata_JCP2022").is_in([neg_control_jcpcode])
     )
 
@@ -198,6 +207,8 @@ def get_negative_ctrl_location_for_plate(
         found_wells,
         on=("Metadata_Source", "Metadata_Plate"),
     )
+    location = ["Metadata_Source", "Metadata_Batch", "Metadata_Plate", "Metadata_Well"]
+    well_level_metadata = well_level_metadata.select(location).unique()
     return well_level_metadata
 
 
