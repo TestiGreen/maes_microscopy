@@ -9,7 +9,7 @@ from pathlib import Path
 
 # When DEBUG_MODE is True, few, randomly sampled compounds will be processed, and fewer activities per
 # compound will be processed to make test routines faster.
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 
 def __update_progress(idx, total, txt_1, txt_2):
@@ -65,9 +65,9 @@ def collect_compounds() -> pd.DataFrame:
     if DEBUG_MODE:
         dilirank_df = dilirank_df.sample(n=10)
 
-    chembl_data = []
     total = len(dilirank_df)
     for idx, compound in enumerate(dilirank_df.itertuples()):
+        chembl_data = []
         compound_name = compound._2
         chembl_compounds = get_molecules_by_name(compound_name, clean=True, compact=True)
 
@@ -79,8 +79,16 @@ def collect_compounds() -> pd.DataFrame:
                 "Compound Name": compound_name,
                 **chembl_compound
             })
+
+        # Store the just-read compounds into a table
+        if len(chembl_data) > 0:
+            chembl_df = pd.DataFrame(chembl_data)
+            cmpd_df = pd.merge(dilirank_df, chembl_df, on='Compound Name', how='inner')
+            db_storer.store_compounds(cmpd_df, new_db=(idx == 0))
+
     print("")
-    return pd.merge(dilirank_df, pd.DataFrame(chembl_data), on='Compound Name', how='left')
+    # return pd.merge(dilirank_df, pd.DataFrame(chembl_data), on='Compound Name', how='left')
+    return db_storer.read_compounds()
 
 
 def save_compounds(df: pd.DataFrame, data_directory: str='./data', data_file: str='diliranked_compounds'):

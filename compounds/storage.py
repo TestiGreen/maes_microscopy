@@ -35,7 +35,7 @@ class DB_Storer:
         self.base_database_url = f'sqlite:///{data_directory}/{{}}.db'
         self.data_directory = data_directory
 
-    def store_compounds(self, df: pd.DataFrame):
+    def store_compounds(self, df: pd.DataFrame, new_db: bool=False):
         """
         Stores compound data into a specified database.
 
@@ -48,7 +48,7 @@ class DB_Storer:
         """
         database_url = self.base_database_url.format(DB_Storer.COMPOUND_DB)
         sql_engine = create_engine(database_url)
-        df.to_sql('compounds', con=sql_engine, if_exists='replace', index=False)
+        df.to_sql('compounds', con=sql_engine, if_exists='replace' if new_db else 'append', index=False)
 
     def store_activities(self, df: pd.DataFrame, new_db: bool=False):
         """
@@ -70,6 +70,20 @@ class DB_Storer:
         sql_engine = create_engine(database_url)
         df.to_sql('activities', con=sql_engine, if_exists='replace' if new_db else 'append', index=False)
 
+    def read_compounds(self) -> pd.DataFrame:
+        """
+        Reads compound data from the 'compounds' table in the SQLite database.
+    
+        This method connects to the SQLite database where compound data is stored
+        and retrieves the data as a pandas DataFrame.
+    
+        :return: A pandas DataFrame containing the compound data.
+        :rtype: pd.DataFrame
+        """
+        database_url = self.base_database_url.format(DB_Storer.COMPOUND_DB)
+        sql_engine = create_engine(database_url)
+        return pd.read_sql_table('compounds', con=sql_engine)
+        
 
 # Use a single instance of the DB_Storer classes.  The first time this module is loaded a new instance will be made
 # and stored in the global namespace.  Later the same instance will be retrieved from the global scope.
