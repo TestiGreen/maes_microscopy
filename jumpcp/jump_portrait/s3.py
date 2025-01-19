@@ -105,7 +105,7 @@ def get_corrected_image(
 
 
     """
-    print(f'before build_s3_image_path')
+    # print(f'before build_s3_image_path')
     s3_image_path = build_s3_image_path(
         row=images_location,
         channel=channel,
@@ -113,7 +113,7 @@ def get_corrected_image(
         compressed=compressed,
         staging=staging
     )
-    print(f'debug_s3_image_path: {s3_image_path} for image location: {images_location}')
+    # print(f'debug_s3_image_path: {s3_image_path} for image location: {images_location}')
     result = get_image_from_s3uri(s3_image_path, s3_image_path.bucket, staging=staging)
 
     if apply_correction and not correction in ("Orig", None):

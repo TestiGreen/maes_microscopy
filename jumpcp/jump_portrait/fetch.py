@@ -15,8 +15,7 @@ Current problems:
 - Control info is murky, requires using broad_babel
 
 """
-
-
+import sys
 from itertools import  product, starmap
 
 import numpy as np
@@ -100,23 +99,23 @@ def get_jump_image(
         Metadata_Source=source, Metadata_Batch=batch, Metadata_Plate=plate
     )
 
-    print(f'debug get s3_location_frame_uri :{s3_location_frame_uri}')
+    #print(f'debug get s3_location_frame_uri :{s3_location_frame_uri}')
     location_frame = read_parquet_s3(s3_location_frame_uri)
-    print(f'debug get location frame :{location_frame}: well {well} site: {site}')
-    if source == "source_6":
-        output_path = f'C:/Development/PyRate Cell Painting/data/Images/Control/{source}_w{well}_s{site}.csv'
-        location_frame.write_csv(output_path)
+    #print(f'debug get location frame :{location_frame}: well {well} site: {site}')
+    # if source == "source_6":
+    #     output_path = f'C:/Development/PyRate Cell Painting/data/Images/Control/{source}_w{well}_s{site}.csv'
+    #     location_frame.write_csv(output_path)
 
 
     unique_site = location_frame.filter(
         (pl.col("Metadata_Well") == well) & (pl.col("Metadata_Site") == str(site))
     )
-    print(f'debug get unique site :{unique_site}')
+    #print(f'debug get unique site :{unique_site}')
 
     assert len(unique_site) == 1, "More than one site found"
-    print(f'after assert')
+    #print(f'after assert')
     first_row = unique_site.row(0, named=True)
-    print(f'debug get first row :{first_row}')
+    #print(f'debug get first row :{first_row}')
     # Compressed images are already corrected
     if compressed:
         correction = None
@@ -133,6 +132,7 @@ def get_jump_image_batch(
         site: list[str],
         correction: str='Orig',
         verbose: bool=True,
+        get_jump_image_func: callable=get_jump_image,
 ) -> tuple[list[tuple], list[np.ndarray]]:
     '''
     Load jump image associated to metadata in a threaded fashion.
@@ -152,6 +152,8 @@ def get_jump_image_batch(
         Must be 'Illum' or 'Orig'
     verbose : bool
         Whether to enable tqdm or not.
+    get_jump_image_func : callable
+        Used to retrieve image from JumpCP.  Defaults to `get_jump_image`
 
     Return:
     ----------
@@ -161,11 +163,15 @@ def get_jump_image_batch(
         list containing the images
 
     '''
+    # TODO: pass in the location where the data to be stored and create a method for save_jump_image
     iterable = list(starmap(lambda *x: (*x[0], *x[1:]), product(metadata.rows(), channel, site, [correction])))
-    img_list = parallel(iterable, batch_processing(try_function(get_jump_image)),
-                        verbose=verbose)
-
-    return iterable, img_list
+    try:
+        img_list = parallel(iterable, batch_processing(try_function(get_jump_image_func)),
+                            verbose=verbose)
+        return iterable, img_list
+    except Exception as e:
+        sys.stderr.write(f'Error downloading data for {metadata} {channel} {site} {correction}: {e}')
+        return iterable, []
 
 def get_negative_ctrl_location_for_plate(
         source_metadata: str,
@@ -308,7 +314,7 @@ def get_well_image_uris(s3_location_uri, wells: list[str]) -> pl.DataFrame:
 
 def get_item_location_info(
     item_name: str,
-    input_column="standard_key",
+    input_column: str="standard_key",
 ) -> pl.DataFrame:
     """Wrapper to obtain a dataframe with locations of an item. It removes duplicate rows.
 
@@ -316,6 +322,8 @@ def get_item_location_info(
     ----------
     item_name : str
         Item of interest to query
+    input_column: str
+        Name of the column to use for the query. Default is "standard_key".
 
     Returns
     -------
@@ -330,7 +338,11 @@ def get_item_location_info(
     well_level_metadata = get_item_location_metadata(
         item_name, input_column=input_column
     )
-    assert len(well_level_metadata), f"Item {item_name} was not found in column {input_column}"
+    # assert len(well_level_metadata), f"Item {item_name} was not found in column {input_column}"
+    # If no metadata is found, return an empty data frame.
+    if len(well_level_metadata) == 0:
+        return pl.DataFrame()
+
     # Note that this breaks if we pass item_name="JCP2022_033924" and
     # input_column="JCP2022" due to the negative control
     item_selected_meta = load_filter_well_metadata(well_level_metadata)

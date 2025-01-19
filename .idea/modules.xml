@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/maes_microscopy.iml" filepath="$PROJECT_DIR$/.idea/maes_microscopy.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/Pyrate-Cell-Painting.iml" filepath="$PROJECT_DIR$/.idea/Pyrate-Cell-Painting.iml" />
     </modules>
   </component>
 </project>

@@ -1,3 +1,5 @@
+import sys
+
 import pandas as pd
 import numpy as np
 import pandas as pd
@@ -77,12 +79,89 @@ def is_valid_numpy_array(arr, expected_shape=None, expected_dtype=None, check_na
 
     return True, "Valid NumPy array."
 
+
+def get_download_and_save_jump_image(storage_folder: str) -> callable:
+    """
+    Create a callable function that downloads, validates, and saves an image.  The return of this
+    function should be passed into the `get_jump_image_batch` function to replace the default
+    `get_jump_image` function for dowloading images.  The returned callable has the same signature
+    as the `get_jump_image` function and does the same job, but also saves the image to disk.
+
+    Parameters:
+        storage_folder (str): Path to the local directory where images will be saved.
+
+    Returns:
+        callable: A function that downloads, validates, and saves an image given source and
+        specific metadata parameters.
+    """
+    if not os.path.exists(storage_folder):
+        os.makedirs(storage_folder, exist_ok=True)
+
+    def get_and_save_jump_image(
+            source: str,
+            batch: str,
+            plate: str,
+            well: str,
+            channel: str,
+            site: str = 1,
+            correction: str = "Orig",
+            apply_correction: bool = True,
+            compressed: bool = False,
+            staging: bool = False
+    ) -> np.ndarray:
+        try:
+            img_array = get_jump_image(source,
+                                       batch,
+                                       plate,
+                                       well,
+                                       channel,
+                                       site,
+                                       correction,
+                                       apply_correction,
+                                       compressed,
+                                       staging)
+            img_name = f"{source}_{plate}_w{well}_s{site}_c{channel}"
+            valid_result = is_valid_numpy_array(img_array)
+            if valid_result[0]:
+                np.save(os.path.join(storage_folder, img_name + ".npy"),
+                        img_array,
+                        allow_pickle=True)
+                # tiff.imwrite(os.path.join(file_folder, img_name + ".tiff"), img)
+            else:
+                print(f"{img_name}: {valid_result[1]}")
+
+        except Exception as e:
+            sys.stderr.write(f"Error downloading or saving image: {e}\n")
+
+        return np.zeros(0)
+
+    return get_and_save_jump_image
+
+
 def download_images_for_compound(comp, location, comp_folder):
+    NO_DATA = pd.DataFrame()
+
+    if comp is None:
+        return NO_DATA
+
     info_location = get_item_location_info(comp)
+
+    # If no data, return the empty dataframe
+    if info_location.shape[0] == 0:
+        return NO_DATA
+
     sub_location_df = info_location.select(location).unique()
-    print(sub_location_df)
+    # print(sub_location_df)
     comp_save_folder = os.path.join(comp_folder, comp)
+
+    if os.path.exists(comp_save_folder):
+        print(f"Compound {comp} already downloaded, skipping")
+        return NO_DATA
+
     meta_array = download_images_for_location(comp_save_folder, sub_location_df)
+
+    if len(meta_array) == 0:
+        return NO_DATA
 
     # Convert meta_array into a DataFrame and save it as a CSV file
     meta_df = pd.DataFrame(meta_array)
@@ -103,23 +182,16 @@ def download_images_for_location(file_folder, sub_location_df):
     site = [str(i) for i in range(10)]  # every site from 0 to 9 (as this is a CRISPR plate)
     correction = "Orig"  # or "Illum"
     verbose = True  # whether to have tqdm loading bar
-    meta_array, img_array = get_jump_image_batch(sub_location_df, channel, site, correction, verbose)
-    print(meta_array)
-    print(f'length of image array is {len(img_array)}')
-    assert (len(meta_array) == len(img_array))
-    # Import required for directory creation
-    # Create folder in the ../data/images directory using the value of comp
-    # comp_folder = os.path.join("../data/images", comp)
-    os.makedirs(file_folder, exist_ok=True)
-    for idx, img in enumerate(img_array):
-        valid_result = is_valid_numpy_array(img)
-        if valid_result[0]:
-            np.save(os.path.join(file_folder, f"img_{idx}.npy"), img, allow_pickle=True)
-            #tiff.imwrite(os.path.join(file_folder, f"img_{idx}.tiff"), img)
-        else:
-            print(valid_result[1])
-    return meta_array
+    # TODO: move the save image to the parallel loop , make a method call save_jump_image_batch
 
+    download_images_func = get_download_and_save_jump_image(file_folder)
+    meta_array, img_array = get_jump_image_batch(sub_location_df,
+                                                 channel,
+                                                 site,
+                                                 correction,
+                                                 verbose,
+                                                 download_images_func)
+    return meta_array
 
 @pytest.mark.parametrize("comp", ["ZYVXTMKTGDARKR-UHFFFAOYSA-N"])
 @pytest.mark.parametrize("location", [

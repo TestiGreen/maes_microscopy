@@ -1,18 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="compounds" uuid="971c87a3-06d7-46e6-9360-5bb26c3a1fb8">
+    <data-source source="LOCAL" name="compounds" uuid="0bd8aeb4-315c-4a5f-9664-37eb94284528">
       <driver-ref>sqlite.xerial</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
-      <jdbc-url>jdbc:sqlite:C:\Development\maes_microscopy\data\chembl\compounds.db</jdbc-url>
+      <jdbc-url>jdbc:sqlite:C:\Development\Pyrate-Cell-Painting\data\chembl\compounds.db</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
+      <libraries>
+        <library>
+          <url>file://$APPLICATION_CONFIG_DIR$/jdbc-drivers/Xerial SQLiteJDBC/3.45.1/org/xerial/sqlite-jdbc/3.45.1.0/sqlite-jdbc-3.45.1.0.jar</url>
+        </library>
+        <library>
+          <url>file://$APPLICATION_CONFIG_DIR$/jdbc-drivers/Xerial SQLiteJDBC/3.45.1/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar</url>
+        </library>
+      </libraries>
     </data-source>
-    <data-source source="LOCAL" name="activities" uuid="f5d0e710-1606-4673-a8bd-15b42e2e79dc">
+    <data-source source="LOCAL" name="activities" uuid="e152def5-b0b9-45b0-9bea-15889d201ad5">
       <driver-ref>sqlite.xerial</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
-      <jdbc-url>jdbc:sqlite:C:\Development\maes_microscopy\data\chembl\activities.db</jdbc-url>
+      <jdbc-url>jdbc:sqlite:C:\Development\Pyrate-Cell-Painting\data\chembl\activities.db</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
       <libraries>
         <library>

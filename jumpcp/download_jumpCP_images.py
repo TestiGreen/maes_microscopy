@@ -1,9 +1,16 @@
+import sys
+
+from compounds.storage import db_storer
+
 import jump_cp_utilities as jcp_utils
 import pandas as pd
 import os
 
+SaveTo = 'D:/Project/PyRate/data/images'
+
+
 def download_control_images(meta_df):
-    image_dir = r"../data/images/Control"
+    image_dir = os.path.join(SaveTo, "Control")
     if not os.path.exists(image_dir):
         os.makedirs(image_dir)
     
@@ -24,32 +31,46 @@ def download_control_images(meta_df):
             
             location_df.write_csv(os.path.join(control_plate_folder_name, "meta.csv"))
 
+def download_dili_images(): #comp_file_path):
+    # df = pd.read_csv(comp_file_path)
+    df = db_storer.read_compounds()
+    # df = df.head(1)
 
-
-
-
-
-def download_dili_images(comp_file_path):
-    df = pd.read_csv(comp_file_path)
-
-    df = df.head(1)
-
-    image_dir = r"../data/images/Dili"
+    image_dir = os.path.join(SaveTo, "Dili")
     if not os.path.exists(image_dir):
         os.makedirs(image_dir)
     location = ["Metadata_Source", "Metadata_Batch", "Metadata_Plate", "Metadata_Well"]
     for inchi_key in df['inchi_key']:
         meta_df = jcp_utils.download_images_for_compound(inchi_key, location, image_dir)
+
+        # If no data then don't get the controls
+        if len(meta_df) == 0:
+            sys.stderr.write(f"No data found for {inchi_key}\n")
+            continue
+
         #meta_df = pd.read_csv(r'C:\Development\PyRate Cell Painting\data\Images\Dili\meta_single.csv')
         download_control_images(meta_df)
 
 def test_save_negative_control_images():
-    meta_file = r'C:\Development\PyRate Cell Painting\data\Images\Dili\meta.csv'
+
+    meta_file = r'D:\Project\PyRate\data\images\Dili\GLVAUDGFNGKCSF-UHFFFAOYSA-N\meta.csv'
     meta_df = pd.read_csv(meta_file)
     download_control_images(meta_df)
 
+def test_get_compound_image():
+    inchi_key = 'RZVAJINKPMORJF-UHFFFAOYSA-N'
+    image_dir = os.path.join(SaveTo, "Dili")
+    if not os.path.exists(image_dir):
+        os.makedirs(image_dir)
+    location = ["Metadata_Source", "Metadata_Batch", "Metadata_Plate", "Metadata_Well"]
+    meta_df = jcp_utils.download_images_for_compound(inchi_key, location, image_dir)
+    if len(meta_df) == 0:
+        print("No data found")
+    else:
+        download_control_images(meta_df)
+
 if __name__ == "__main__":
-   dili_file_path = r"../data/chembl/diliranked_compounds.csv"
-   download_dili_images(dili_file_path)
-   #test_save_negative_control_images()
+   # dili_file_path = r"../data/chembl/diliranked_compounds.csv"
+   download_dili_images() #dili_file_path)
+   # test_save_negative_control_images()
 
