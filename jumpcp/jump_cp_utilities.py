@@ -97,6 +97,9 @@ def get_download_and_save_jump_image(storage_folder: str) -> callable:
     if not os.path.exists(storage_folder):
         os.makedirs(storage_folder, exist_ok=True)
 
+    error_count = 0
+    globals()[f"{storage_folder}_errors"] = error_count
+
     def get_and_save_jump_image(
             source: str,
             batch: str,
@@ -131,7 +134,18 @@ def get_download_and_save_jump_image(storage_folder: str) -> callable:
                 print(f"{img_name}: {valid_result[1]}")
 
         except Exception as e:
-            sys.stderr.write(f"Error downloading or saving image: {e}\n")
+            e_count = globals()[f"{storage_folder}_errors"]
+            e_count += 1
+            globals()[f"{storage_folder}_errors"] = e_count
+
+            message = f"Error downloading or saving image: {e}"
+            # Ansi code (supposedly):
+            # [F == Move to previous line
+            # [G == Move to the start of the line
+            # [2K == Clear the line
+            # [E == Move down one line (the active progress bar?
+            sys.stderr.write(f"\033[F\033[G\033[K{message} ({e_count})\033[E")
+            sys.stderr.flush()
 
         return np.zeros(0)
 
