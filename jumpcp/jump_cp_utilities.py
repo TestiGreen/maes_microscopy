@@ -8,10 +8,10 @@ import tifffile as tiff  # Added for saving TIFF files
 from broad_babel.query import run_query
 import os
 
-from jump_portrait.fetch import get_item_location_info, get_jump_image_batch, get_negative_ctrl_location_for_plate
-from jump_portrait.s3 import get_image_from_s3uri
+from jumpcp.jump_portrait.fetch import get_item_location_info, get_jump_image_batch, get_negative_ctrl_location_for_plate
+from jumpcp.jump_portrait.s3 import get_image_from_s3uri
 
-from jump_portrait.fetch import get_jump_image, get_sample
+from jumpcp.jump_portrait.fetch import get_jump_image, get_sample
 
 def test_get_labels():
     result = run_query(query="negcon", input_column="pert_type", output_columns="*")
@@ -168,9 +168,12 @@ def download_images_for_compound(comp, location, comp_folder):
     # print(sub_location_df)
     comp_save_folder = os.path.join(comp_folder, comp)
 
-    if os.path.exists(comp_save_folder):
-        print(f"Compound {comp} already downloaded, skipping")
-        return NO_DATA
+    meta_csv_path = os.path.join(comp_save_folder, "meta.csv")
+    if os.path.exists(comp_save_folder) and os.path.exists(meta_csv_path):
+        print(f"Compound {comp} already downloaded, skipping download and reading metadata")
+
+        meta_df = pd.read_csv(meta_csv_path)
+        return meta_df
 
     meta_array = download_images_for_location(comp_save_folder, sub_location_df)
 
@@ -181,7 +184,7 @@ def download_images_for_compound(comp, location, comp_folder):
     meta_df = pd.DataFrame(meta_array)
     meta_df.columns = ["Metadata_Source", "Metadata_Batch", "Metadata_Plate", "Metadata_Well", "Channel", "Site",
                        "Correction"]
-    meta_df.to_csv(os.path.join(comp_save_folder, "meta.csv"), index=True)
+    meta_df.to_csv(meta_csv_path, index=True)
     return meta_df
 
 

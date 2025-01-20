@@ -2,11 +2,13 @@ import sys
 
 from compounds.storage import db_storer
 
-import jump_cp_utilities as jcp_utils
+import jumpcp.jump_cp_utilities as jcp_utils
 import pandas as pd
 import os
 
 SaveTo = 'D:/Project/PyRate/data/images'
+
+REVERSE = True
 
 
 def download_control_images(meta_df):
@@ -34,6 +36,8 @@ def download_control_images(meta_df):
 def download_dili_images(): #comp_file_path):
     # df = pd.read_csv(comp_file_path)
     df = db_storer.read_compounds()
+    if REVERSE:
+        df = df.sort_values(by='LTKBID', ascending=False)
     # df = df.head(1)
 
     image_dir = os.path.join(SaveTo, "Dili")

@@ -23,9 +23,9 @@ import polars as pl
 from broad_babel import query
 from broad_babel.data import get_table
 
-from jump_portrait.s3 import (build_s3_image_path, get_corrected_image,
+from jumpcp.jump_portrait.s3 import (build_s3_image_path, get_corrected_image,
                               get_image_from_s3uri, read_parquet_s3)
-from jump_portrait.utils import batch_processing, parallel, try_function
+from jumpcp.jump_portrait.utils import batch_processing, parallel, try_function
 
 
 def format_cellpainting_s3() -> str:

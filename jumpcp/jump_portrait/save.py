@@ -12,12 +12,12 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from jump_portrait.fetch import (
+from jumpcp.jump_portrait.fetch import (
     build_s3_image_path,
     get_item_location_info,
 )
-from jump_portrait.s3 import get_corrected_image
-from jump_portrait.utils import batch_processing, parallel
+from jumpcp.jump_portrait.s3 import get_corrected_image
+from jumpcp.jump_portrait.utils import batch_processing, parallel
 from joblib import Parallel, delayed
 from tqdm import tqdm
 
