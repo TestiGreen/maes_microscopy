@@ -1,8 +1,10 @@
 import sys
+import random
 
 import pandas as pd
 import numpy as np
 import pandas as pd
+import polars as pl
 import pytest
 import tifffile as tiff  # Added for saving TIFF files
 from broad_babel.query import run_query
@@ -152,7 +154,7 @@ def get_download_and_save_jump_image(storage_folder: str) -> callable:
     return get_and_save_jump_image
 
 
-def download_images_for_compound(comp, location, comp_folder):
+def download_images_for_compound(comp: str, location: list[str], comp_folder: str, sample_source_count: int=3):
     NO_DATA = pd.DataFrame()
 
     if comp is None:
@@ -165,6 +167,13 @@ def download_images_for_compound(comp, location, comp_folder):
         return NO_DATA
 
     sub_location_df = info_location.select(location).unique()
+    source_list = sub_location_df['Metadata_Source'].unique().to_list()
+    if len(source_list) > sample_source_count:
+        # Randomly sample the source_list to get the sample_source_count
+        # Then filter sub_location_df to include just the rows with those sampled sources
+        sampled_sources = random.sample(source_list, sample_source_count)
+        sub_location_df = sub_location_df.filter(pl.col("Metadata_Source").is_in(sampled_sources))
+
     # print(sub_location_df)
     comp_save_folder = os.path.join(comp_folder, comp)
 
@@ -230,6 +239,16 @@ def test_npy_data():
     np_data = np.load(file_path)
     tiff.imwrite(os.path.join(os.path.dirname(file_path), f"recover.tiff"), np_data)
     print(np_data.shape)
+
+@pytest.mark.parametrize("dir", ["D:\\Project\\PyRate\\data\\images\\Dili\\BNRNXUUZRGQAQC-UHFFFAOYSA-N"])
+def test_check_image_data_max_intensity(dir):
+    for root, dirs, files in os.walk(dir):
+        for file in files:
+            if file.endswith(".npy"):
+                file_path = os.path.join(root, file)
+                np_data = np.load(file_path)
+                print(f"File: {file}, Max Value: {np.max(np_data)}")
+    
 
 
 
